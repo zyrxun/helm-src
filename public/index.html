@@ -601,6 +601,17 @@
       padding: 6px 10px; cursor: pointer; margin-top: 4px; text-align: left;
     }
     .deactivate-btn:hover { background: rgba(255,69,58,0.08); border-color: var(--helm-alert); }
+    .settings-toggle {
+      font-family: var(--font-ui); font-size: 11px; font-weight: 600;
+      padding: 3px 10px; border-radius: 20px; cursor: pointer;
+      border: 0.5px solid rgba(247,244,239,0.15);
+      background: rgba(247,244,239,0.06); color: var(--helm-fog);
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .settings-toggle.on {
+      background: rgba(212,175,106,0.12); color: var(--helm-gold);
+      border-color: rgba(212,175,106,0.35);
+    }
     .done-btn {
       width: 100%; margin-top: 4px; padding: 10px;
       background: var(--helm-gold); border: 0.5px solid var(--helm-gold);
@@ -698,6 +709,23 @@
       </div>
     </section>
 
+    <div class="settings-divider"></div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">System</div>
+      <div class="settings-row">
+        <span class="settings-key">Launch at Login</span>
+        <button id="s-login-toggle" class="settings-toggle" onclick="toggleLoginItem()">—</button>
+      </div>
+      <div class="settings-row" id="s-accessibility-row">
+        <span class="settings-key">Accessibility</span>
+        <span id="s-accessibility-val" class="settings-val"></span>
+      </div>
+      <button id="s-accessibility-btn" class="deactivate-btn" style="display:none" onclick="requestAccessibility()">
+        Grant Access in System Settings
+      </button>
+    </section>
+
     <button class="done-btn" onclick="closeSettings()">Done</button>
   </div>
 </div>
@@ -726,7 +754,7 @@
   <div class="section-label">Workflows</div>
 
   <div class="workflow-list" id="workflow-list">
-    <div class="empty-state">No workflows yet.</div>
+    <div class="empty-state">No workflows yet.<br><span style="font-size:11px;opacity:0.7">Tap + to capture your first workflow.</span></div>
   </div>
 
   <div id="license-revoked-card" style="display:none;margin:0 12px 8px;padding:12px;border:0.5px solid var(--helm-alert);border-radius:var(--r-card);background:rgba(255,69,58,0.06)">
@@ -837,7 +865,7 @@
     const list = document.getElementById('workflow-list');
 
     if (!workflows.length) {
-      list.innerHTML = '<div class="empty-state">No workflows yet.</div>';
+      list.innerHTML = '<div class="empty-state">No workflows yet.<br><span style="font-size:11px;opacity:0.7">Tap + to capture your first workflow.</span></div>';
       updateAddButton();
       return;
     }
@@ -910,7 +938,18 @@
     const spinWheel = makeWheel(18, 'wheel-green', 'wheel-fast');
     btn.appendChild(spinWheel);
 
-    await window.api.runWorkflow(id);
+    const runResult = await window.api.runWorkflow(id);
+
+    if (runResult && !runResult.ok && runResult.error === 'accessibility_denied') {
+      list.classList.remove('is-launching');
+      row.classList.remove('active-target');
+      btn.classList.remove('running');
+      btn.innerHTML = '<div class="play-triangle"></div>';
+      btn.addEventListener('click', () => runWorkflow(id), { once: true });
+      setStatus('ready');
+      showToast('Accessibility access required. Open Settings → System to grant it.');
+      return;
+    }
 
     // Reset after launch
     setTimeout(() => {
@@ -1322,7 +1361,37 @@
     el('s-deactivate-btn').style.display   = status.isPro ? 'block' : 'none';
     el('s-license-file-row').style.display = status.isPro ? 'flex' : 'none';
 
+    // System section
+    const loginOn = await window.api.getLoginItem();
+    const toggle = document.getElementById('s-login-toggle');
+    toggle.textContent = loginOn ? 'On' : 'Off';
+    toggle.classList.toggle('on', loginOn);
+
+    const hasA11y = await window.api.getAccessibility();
+    document.getElementById('s-accessibility-val').textContent = hasA11y ? 'Granted' : 'Not granted';
+    document.getElementById('s-accessibility-val').style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
+    document.getElementById('s-accessibility-btn').style.display = hasA11y ? 'none' : 'block';
+
     document.getElementById('settings-overlay').classList.add('visible');
+  }
+
+  async function toggleLoginItem() {
+    const toggle = document.getElementById('s-login-toggle');
+    const current = toggle.classList.contains('on');
+    await window.api.setLoginItem(!current);
+    toggle.classList.toggle('on', !current);
+    toggle.textContent = !current ? 'On' : 'Off';
+  }
+
+  async function requestAccessibility() {
+    await window.api.requestAccessibility();
+    // Re-check after a short delay — user may have just granted it
+    setTimeout(async () => {
+      const hasA11y = await window.api.getAccessibility();
+      document.getElementById('s-accessibility-val').textContent = hasA11y ? 'Granted' : 'Not granted';
+      document.getElementById('s-accessibility-val').style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
+      document.getElementById('s-accessibility-btn').style.display = hasA11y ? 'none' : 'block';
+    }, 1500);
   }
 
   function closeSettings() {

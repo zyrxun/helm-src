@@ -1,5 +1,3 @@
-const { notarize } = require('@electron/notarize');
-
 module.exports = async function(context) {
   const { electronPlatformName, appOutDir, packager } = context;
   if (electronPlatformName !== 'darwin') return;
@@ -8,6 +6,8 @@ module.exports = async function(context) {
     console.warn('Skipping notarization: APPLE_ID / APPLE_APP_PASSWORD not set.');
     return;
   }
+
+  const { notarize } = require('@electron/notarize');
 
   const appPath = `${appOutDir}/${packager.appInfo.productFilename}.app`;
   console.log(`Notarizing: ${appPath}`);

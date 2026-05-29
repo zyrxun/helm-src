@@ -3,4 +3,5 @@ dist/
 .env
 *.key
 public/brand/icon.icns
+public/brand/dmg-background.png
 *.iconset/

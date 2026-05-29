@@ -1,6 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater } = require('electron');
+const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater, systemPreferences } = require('electron');
 const { execFile } = require('child_process');
 const path    = require('path');
 
@@ -27,10 +27,21 @@ function isUserAuthorized() {
 }
 
 function createTrayIcon() {
-  const iconPath = path.join(__dirname, '../public/brand/menubar-icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
-  icon.setTemplateImage(true);
-  return icon;
+  const icon = nativeImage.createFromPath(path.join(__dirname, '../public/brand/menubar-icon.png'));
+  // Provide @2x for Retina — Electron picks it up automatically when suffixed
+  const icon2x = nativeImage.createFromPath(path.join(__dirname, '../public/brand/menubar-icon@2x.png'));
+  const merged = icon2x.isEmpty() ? icon : icon2x;
+  merged.setTemplateImage(true);
+  return merged;
+}
+
+function hasAccessibility() {
+  return systemPreferences.isTrustedAccessibilityClient(false);
+}
+
+function requestAccessibility() {
+  // Prompts macOS to show the Accessibility permission dialog
+  systemPreferences.isTrustedAccessibilityClient(true);
 }
 
 function getWindowPosition() {
@@ -180,6 +191,7 @@ ipcMain.handle('get-workflows', () => storage.load());
 
 ipcMain.handle('run-workflow', (_, workflowId) => {
   if (!isSafeId(workflowId)) return { ok: false, error: 'Invalid workflow id' };
+  if (!hasAccessibility()) return { ok: false, error: 'accessibility_denied' };
 
   const workflows = storage.load();
   const workflow  = workflows.find(w => w.id === workflowId);
@@ -274,6 +286,20 @@ ipcMain.handle('get-free-limit', () => FREE_LIMIT);
 ipcMain.handle('install-update', () => autoUpdater.quitAndInstall());
 
 ipcMain.handle('get-stripe-url', () => process.env.HELM_STRIPE_URL ?? null);
+
+ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);
+
+ipcMain.handle('set-login-item', (_, enable) => {
+  app.setLoginItemSettings({ openAtLogin: !!enable });
+  return { ok: true };
+});
+
+ipcMain.handle('get-accessibility', () => hasAccessibility());
+
+ipcMain.handle('request-accessibility', () => {
+  requestAccessibility();
+  return { ok: true };
+});
 
 ipcMain.handle('deactivate-license', () => {
   try {

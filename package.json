@@ -3,6 +3,7 @@
   "productName": "Helm",
   "version": "1.0.0",
   "description": "macOS menu bar workflow orchestrator",
+  "author": "zyrxun",
   "main": "electron/main.js",
   "scripts": {
     "build":      "tsc && mkdir -p dist/jxa && cp src/platform/macos/*.jxa dist/jxa/",
