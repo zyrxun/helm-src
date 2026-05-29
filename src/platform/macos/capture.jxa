@@ -1,0 +1,67 @@
+function run() {
+  var se = Application("System Events");
+  var result = { apps: [] };
+
+  var procs = se.processes.whose({ backgroundOnly: false, visible: true });
+  var names = Object.values(procs.name());
+
+  var browserNames = ["Google Chrome", "Safari", "Arc", "Firefox"];
+  var skip = [
+    "Finder", "Dock", "SystemUIServer", "Control Center",
+    "WindowServer", "loginwindow", "NotificationCenter", "Spotlight",
+    "Alfred", "Raycast", "Activity Monitor"
+  ];
+
+  names.forEach(function(name) {
+    if (name === "Spotify") {
+      try {
+        var spotify = Application("Spotify");
+        if (spotify.running()) {
+          var entry = { name: "Spotify" };
+          try {
+            var state = spotify.playerState();
+            if (state === "playing" || state === "paused") {
+              var track = spotify.currentTrack;
+              var trackId = track.id();
+              var trackName = track.name();
+              var artist = track.artist();
+              if (trackId) {
+                entry.urlToOpen = trackId;
+                entry.label = trackName + (artist ? "  ·  " + artist : "");
+              }
+            }
+          } catch(spotifyErr) { /* track info unavailable */ }
+          result.apps.push(entry);
+        }
+      } catch(e) { /* Spotify not installed */ }
+      return;
+    }
+    if (browserNames.indexOf(name) !== -1) {
+      try {
+        var browser = Application(name);
+        if (browser.running()) {
+          if (name !== "Firefox") {
+            var windows = Object.values(browser.windows());
+            windows.forEach(function(win) {
+              var tabs = Object.values(win.tabs());
+              tabs.forEach(function(tab) {
+                try {
+                  var url = tab.url();
+                  if (url) result.apps.push({ name: name, urlToOpen: url });
+                } catch(tabErr) { /* skip detached tabs */ }
+              });
+            });
+          } else {
+            result.apps.push({ name: name });
+          }
+        }
+      } catch(e) {
+        result.apps.push({ name: name });
+      }
+    } else if (skip.indexOf(name) === -1) {
+      result.apps.push({ name: name });
+    }
+  });
+
+  return JSON.stringify(result);
+}

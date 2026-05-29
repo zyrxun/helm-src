@@ -1,0 +1,47 @@
+function run(argv) {
+  var appName = argv[0];
+  var urlArg  = argv[1] || null;
+
+  var app = Application(appName);
+  app.includeStandardAdditions = true;
+
+  var wasRunning = app.running(); // capture BEFORE activate changes state
+  app.activate();
+
+  if (appName === "Spotify" && urlArg && urlArg.indexOf("spotify:") === 0) {
+    if (!wasRunning) delay(2);
+    else delay(0.3);
+    try {
+      app.playTrack(urlArg);
+    } catch(e) { /* playTrack unavailable — Spotify still opened */ }
+    return "Processed Spotify";
+  }
+
+  var browsers = ["Google Chrome", "Safari", "Arc"];
+  if (browsers.indexOf(appName) !== -1 && urlArg) {
+    if (!wasRunning) delay(1.5); // cold boot: wait for window layer to appear
+    else delay(0.5);
+
+    if (app.windows.length === 0) app.Document().make();
+
+    var targetWindow = app.windows[0];
+    var tabs = Object.values(targetWindow.tabs());
+    var found = false;
+
+    for (var i = 0; i < tabs.length; i++) {
+      try {
+        if (tabs[i].url() === urlArg) {
+          targetWindow.activeTab = tabs[i];
+          found = true;
+          break;
+        }
+      } catch(e) { /* skip detached tab */ }
+    }
+
+    if (!found) {
+      targetWindow.tabs.push(app.Tab({ url: urlArg }));
+    }
+  }
+
+  return "Processed " + appName;
+}

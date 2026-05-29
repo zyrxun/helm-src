@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Helm</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet"/>
+  <style>
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens ── */
+    :root {
+      --helm-abyss:        #0A1628;
+      --helm-navy:         #1E3A5F;
+      --helm-gold:         #D4AF6A;
+      --helm-gold-pressed: #B8922A;
+      --helm-green:        #30D158;
+      --helm-green-hub:    #0d1f0f;
+      --helm-chalk:        #F7F4EF;
+      --helm-fog:          #C8C4BC;
+      --helm-alert:        #FF453A;
+      --r-button: 7px;
+      --r-card:   10px;
+      --r-window: 14px;
+      --spin-slow: 16s;
+      --spin-fast: 1.8s;
+      --font-display: 'Playfair Display', Georgia, serif;
+      --font-ui:      'Inter', system-ui, sans-serif;
+      --font-mono:    'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    /* ── Body ── */
+    html { height: 100%; }
+
+    body {
+      width: 100%;
+      height: 480px;
+      overflow: hidden;
+      background: var(--helm-abyss);
+      color: var(--helm-chalk);
+      font-family: var(--font-ui);
+      user-select: none;
+      -webkit-app-region: no-drag;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    /* Nautical grid on pseudo-element so the mask only fades the grid, not content */
+    body::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(to right, rgba(212,175,106,0.05) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(212,175,106,0.05) 1px, transparent 1px);
+      background-size: 32px 32px;
+      -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 35%, #000 0%, transparent 78%);
+              mask-image: radial-gradient(ellipse 75% 70% at 50% 35%, #000 0%, transparent 78%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Lift all direct children above the grid layer */
+    body > * { position: relative; z-index: 1; }
+
+    /* ── Wheel SVG ── */
+    .wheel-icon {
+      transform-origin: center;
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .wheel-gold  { color: var(--helm-gold);  --hub-fill: var(--helm-abyss); }
+    .wheel-green { color: var(--helm-green); --hub-fill: var(--helm-green-hub); }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    .wheel-slow { animation: spin var(--spin-slow) linear infinite; }
+    .wheel-fast { animation: spin var(--spin-fast) linear infinite; }
+
+    /* ── Views ── */
+    .view { display: none; flex-direction: column; height: 480px; }
+    .view.active { display: flex; }
+
+    /* ── Header ── */
+    .helm-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      flex-shrink: 0;
+    }
+    .helm-header-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wordmark {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--helm-gold);
+      line-height: 1;
+    }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--helm-fog);
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.green { background: var(--helm-green); }
+    .status-dot.gold  { background: var(--helm-gold); }
+    .status-dot.alert { background: var(--helm-alert); }
+
+    /* ── Section label ── */
+    .section-label {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 10px;
+      color: #5a7290;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      padding: 0 16px 8px;
+      flex-shrink: 0;
+    }
+
+    /* ── Workflow list ── */
+    .workflow-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px;
+      scrollbar-width: none;
+    }
+    .workflow-list::-webkit-scrollbar { display: none; }
+
+    .workflow-row {
+      background: var(--helm-navy);
+      border: 0.5px solid transparent;
+      border-radius: var(--r-card);
+      padding: 10px 12px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .workflow-row:hover {
+      border-color: rgba(212,175,106,0.55);
+      background: #24446e;
+    }
+    .workflow-row:hover .hotkey {
+      color: var(--helm-chalk);
+    }
+    .workflow-list.is-launching .workflow-row:not(.active-target) {
+      opacity: 0.38;
+      pointer-events: none;
+    }
+    .workflow-row.active-target {
+      border-color: var(--helm-gold);
+      cursor: default;
+    }
+    .workflow-row.active-target .row-summary {
+      color: var(--helm-green);
+    }
+
+    .row-info { flex: 1; min-width: 0; }
+    .row-name {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--helm-chalk);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .row-summary {
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--helm-fog);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* ── Run button ── */
+    .run-btn {
+      width: 30px;
+      height: 30px;
+      border-radius: var(--r-button);
+      border: 0.5px solid var(--helm-gold);
+      background: var(--helm-gold);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .run-btn:active { background: var(--helm-gold-pressed); border-color: var(--helm-gold-pressed); }
+    .run-btn.running {
+      background: var(--helm-green-hub);
+      border-color: var(--helm-green);
+      cursor: default;
+    }
+    /* play triangle via CSS */
+    .play-triangle {
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 8px solid var(--helm-abyss);
+      margin-left: 2px;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      text-align: center;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--helm-fog);
+      padding: 32px 0;
+      opacity: 0.6;
+    }
+
+    /* ── Footer ── */
+    .helm-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px 12px;
+      border-top: 0.5px solid rgba(247,244,239,0.06);
+      flex-shrink: 0;
+      gap: 8px;
+    }
+    .footer-btn {
+      background: transparent;
+      border: none;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 11px;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+    .footer-btn.muted { color: var(--helm-fog); }
+    .footer-btn.muted:hover { color: var(--helm-chalk); }
+
+    /* Prominent gold pill for Add */
+    .add-btn {
+      flex: 1;
+      background: var(--helm-gold);
+      border: 0.5px solid var(--helm-gold);
+      border-radius: var(--r-button);
+      padding: 7px 12px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 12px;
+      color: var(--helm-abyss);
+      cursor: pointer;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+    .add-btn:active { background: var(--helm-gold-pressed); border-color: var(--helm-gold-pressed); }
+    .add-btn .lock-icon { display: none; opacity: 0.7; }
+    .add-btn.at-limit .lock-icon { display: block; }
+
+    /* Pro badge */
+    .pro-badge {
+      display: none;
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 9px;
+      letter-spacing: 0.1em;
+      color: var(--helm-abyss);
+      background: var(--helm-gold);
+      border-radius: 4px;
+      padding: 2px 5px;
+      line-height: 1;
+      margin-left: 2px;
+    }
+    .pro-badge.visible { display: inline-block; }
+
+    /* ── Upgrade overlay ── */
+    #upgrade-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      background: rgba(10,22,40,0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px;
+      gap: 0;
+    }
+    #upgrade-overlay.visible { display: flex; }
+
+    .upgrade-wheel {
+      margin-bottom: 14px;
+    }
+    .upgrade-title {
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 20px;
+      color: var(--helm-gold);
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .upgrade-sub {
+      font-family: var(--font-ui);
+      font-weight: 400;
+      font-size: 12px;
+      color: var(--helm-fog);
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .upgrade-price {
+      font-family: var(--font-ui);
+      font-weight: 700;
+      font-size: 22px;
+      color: var(--helm-chalk);
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .upgrade-price-sub {
+      font-family: var(--font-ui);
+      font-weight: 400;
+      font-size: 11px;
+      color: var(--helm-fog);
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .upgrade-actions {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .upgrade-key-row {
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .upgrade-key-row.visible { display: flex; }
+    .key-error {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--helm-alert);
+      display: none;
+    }
+    .key-error.visible { display: block; }
+
+    /* Edit / Delete buttons on each row */
+    .edit-btn, .delete-btn {
+      width: 26px;
+      height: 26px;
+      background: transparent;
+      border: 0.5px solid rgba(247,244,239,0.14);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      color: var(--helm-fog);
+    }
+    .edit-btn:hover { border-color: var(--helm-gold); color: var(--helm-gold); }
+    .delete-btn:hover { border-color: var(--helm-alert); color: var(--helm-alert); }
+    .edit-btn svg, .delete-btn svg { display: block; }
+
+    /* ── Toast ── */
+    #toast {
+      display: none;
+      position: absolute;
+      bottom: 52px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--helm-abyss);
+      border: 0.5px solid rgba(247,244,239,0.18);
+      border-radius: var(--r-card);
+      padding: 9px 14px;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--helm-chalk);
+      white-space: nowrap;
+      z-index: 10;
+    }
+    #toast.visible { display: block; }
+
+    /* ── Capture view ── */
+    .capture-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      flex-shrink: 0;
+    }
+    .capture-title {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--helm-chalk);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ghost-btn {
+      background: transparent;
+      border: 0.5px solid rgba(247,244,239,0.22);
+      border-radius: var(--r-button);
+      padding: 5px 12px;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--helm-chalk);
+      cursor: pointer;
+    }
+    .ghost-btn:hover { border-color: var(--helm-gold); }
+    .ghost-btn:active { color: var(--helm-gold-pressed); border-color: var(--helm-gold-pressed); }
+
+    .preview-scroll {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0 12px;
+      scrollbar-width: none;
+    }
+    .preview-scroll::-webkit-scrollbar { display: none; }
+
+    /* Select-all bar */
+    .select-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px 6px;
+      flex-shrink: 0;
+    }
+    .select-bar-label {
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--helm-fog);
+    }
+    .select-bar-toggle {
+      background: transparent;
+      border: none;
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 11px;
+      color: var(--helm-gold);
+      cursor: pointer;
+      padding: 0;
+    }
+    .select-bar-toggle:hover { color: var(--helm-chalk); }
+
+    .preview-item {
+      background: var(--helm-navy);
+      border: 0.5px solid rgba(247,244,239,0.08);
+      border-radius: var(--r-card);
+      padding: 8px 12px;
+      margin-bottom: 5px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+    }
+    .preview-item:hover { border-color: rgba(212,175,106,0.4); }
+    .preview-item.deselected {
+      opacity: 0.35;
+      border-color: transparent;
+    }
+    .preview-item.deselected:hover { opacity: 0.55; border-color: rgba(212,175,106,0.2); }
+
+    /* Custom checkbox */
+    .item-check {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 0.5px solid rgba(247,244,239,0.3);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+    }
+    .preview-item:not(.deselected) .item-check {
+      background: var(--helm-gold);
+      border-color: var(--helm-gold);
+    }
+    .item-check svg { display: none; }
+    .preview-item:not(.deselected) .item-check svg { display: block; }
+
+    .preview-app {
+      font-family: var(--font-ui);
+      font-weight: 500;
+      font-size: 12px;
+      color: var(--helm-chalk);
+      flex-shrink: 0;
+      min-width: 80px;
+    }
+    .preview-url {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: #5a7290;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .capture-form {
+      padding: 8px 12px 12px;
+      flex-shrink: 0;
+      border-top: 0.5px solid rgba(247,244,239,0.06);
+    }
+    .capture-form .section-label {
+      padding: 0 0 6px;
+    }
+    .helm-input {
+      width: 100%;
+      background: var(--helm-navy);
+      border: 0.5px solid rgba(247,244,239,0.12);
+      border-radius: var(--r-button);
+      padding: 9px 12px;
+      color: var(--helm-chalk);
+      font-family: var(--font-ui);
+      font-size: 13px;
+      outline: none;
+      margin-bottom: 8px;
+    }
+    .helm-input:focus { border-color: var(--helm-gold); }
+    .helm-input::placeholder { color: var(--helm-fog); opacity: 0.6; }
+
+    .primary-btn {
+      width: 100%;
+      background: var(--helm-gold);
+      border: 0.5px solid var(--helm-gold);
+      border-radius: var(--r-button);
+      padding: 9px;
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--helm-abyss);
+      cursor: pointer;
+    }
+    .primary-btn:active { background: var(--helm-gold-pressed); border-color: var(--helm-gold-pressed); }
+    .primary-btn:disabled { background: rgba(212,175,106,0.3); border-color: transparent; color: rgba(10,22,40,0.6); cursor: not-allowed; }
+
+    /* ── Settings overlay ── */
+    #settings-overlay {
+      display: none; position: fixed; inset: 0; z-index: 20;
+      background: rgba(10,22,40,0.92);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    #settings-overlay.visible { display: flex; }
+    .settings-panel {
+      background: var(--helm-abyss);
+      border: 0.5px rgba(247,244,239,0.10) solid;
+      border-radius: var(--r-window);
+      width: 280px; padding: 20px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .settings-header { display: flex; justify-content: space-between; align-items: center; }
+    .settings-title { font-family: var(--font-display); font-size: 16px; color: var(--helm-gold); }
+    .settings-section { display: flex; flex-direction: column; gap: 10px; }
+    .settings-section-label {
+      font-size: 10px; font-weight: 600; color: var(--helm-fog);
+      letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.7;
+    }
+    .settings-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .settings-key { font-size: 12px; color: var(--helm-fog); flex-shrink: 0; }
+    .settings-val { font-size: 12px; color: var(--helm-chalk); text-align: right; }
+    .settings-val.mono { font-family: var(--font-mono); font-size: 11px; color: var(--helm-fog); }
+    .path-val { cursor: pointer; }
+    .path-val:hover { color: var(--helm-gold); }
+    .settings-divider { height: 0.5px; background: rgba(247,244,239,0.06); }
+    .icon-btn { background: transparent; border: none; color: var(--helm-fog); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: var(--r-button); }
+    .icon-btn:hover { color: var(--helm-chalk); }
+    .deactivate-btn {
+      font-size: 12px; color: var(--helm-alert); background: transparent;
+      border: 0.5px solid rgba(255,69,58,0.3); border-radius: var(--r-button);
+      padding: 6px 10px; cursor: pointer; margin-top: 4px; text-align: left;
+    }
+    .deactivate-btn:hover { background: rgba(255,69,58,0.08); border-color: var(--helm-alert); }
+    .done-btn {
+      width: 100%; margin-top: 4px; padding: 10px;
+      background: var(--helm-gold); border: 0.5px solid var(--helm-gold);
+      color: var(--helm-abyss); font-family: var(--font-ui); font-weight: 600;
+      font-size: 13px; border-radius: var(--r-button); cursor: pointer;
+    }
+    .done-btn:active { background: var(--helm-gold-pressed); border-color: var(--helm-gold-pressed); }
+  </style>
+</head>
+<body>
+
+<!-- ── WHEEL SVG template (hidden, cloned via JS) ── -->
+<template id="wheel-tpl">
+  <svg class="wheel-icon" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <g stroke="currentColor" stroke-width="3.2" stroke-linecap="round">
+      <line x1="50" y1="8"    x2="50" y2="92"/>
+      <line x1="8"  y1="50"   x2="92" y2="50"/>
+      <line x1="22.3" y1="22.3" x2="77.7" y2="77.7"/>
+      <line x1="77.7" y1="22.3" x2="22.3" y2="77.7"/>
+    </g>
+    <circle cx="50" cy="50" r="38" stroke="currentColor" stroke-width="3.8" fill="none"/>
+    <circle cx="50" cy="8"  r="6.5" fill="currentColor"/>
+    <circle cx="50" cy="92" r="6.5" fill="currentColor"/>
+    <circle cx="8"  cy="50" r="6.5" fill="currentColor"/>
+    <circle cx="92" cy="50" r="6.5" fill="currentColor"/>
+    <circle cx="22.3" cy="22.3" r="5.5" fill="currentColor"/>
+    <circle cx="77.7" cy="22.3" r="5.5" fill="currentColor"/>
+    <circle cx="22.3" cy="77.7" r="5.5" fill="currentColor"/>
+    <circle cx="77.7" cy="77.7" r="5.5" fill="currentColor"/>
+    <circle cx="50" cy="50" r="9" fill="var(--hub-fill)" stroke="currentColor" stroke-width="3.2"/>
+    <circle cx="50" cy="50" r="3.5" fill="currentColor"/>
+  </svg>
+</template>
+
+<!-- ── Toast ── -->
+<div id="toast"></div>
+
+<!-- ── Upgrade overlay ── -->
+<div id="upgrade-overlay">
+  <div class="upgrade-wheel" id="upgrade-wheel"></div>
+  <div class="upgrade-title">Helm Pro</div>
+  <div class="upgrade-sub">You've used both free workflow slots.<br>Unlock unlimited for a one-time payment.</div>
+  <div class="upgrade-price">$9</div>
+  <div class="upgrade-price-sub">yours forever — no subscription</div>
+  <div class="upgrade-actions">
+    <button class="primary-btn" onclick="buyPro()">Buy Helm Pro</button>
+    <button class="ghost-btn" style="width:100%;text-align:center" onclick="showKeyEntry()">I already have a key</button>
+    <div class="upgrade-key-row" id="key-row">
+      <input class="helm-input" id="license-input" type="text" placeholder="HLM-…" style="margin-bottom:0"/>
+      <div class="key-error" id="key-error">That key doesn't look right. Check for typos.</div>
+      <button class="primary-btn" id="activate-btn" onclick="activateKey()">Activate</button>
+    </div>
+    <button class="ghost-btn" style="width:100%;text-align:center;margin-top:2px" onclick="closeUpgrade()">Not now</button>
+  </div>
+</div>
+
+<!-- ── Settings overlay ── -->
+<div id="settings-overlay">
+  <div class="settings-panel">
+    <div class="settings-header">
+      <span class="settings-title">Settings</span>
+      <button class="icon-btn" onclick="closeSettings()">✕</button>
+    </div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">License</div>
+      <div class="settings-row">
+        <span class="settings-key">Status</span>
+        <span id="s-status" class="settings-val"></span>
+      </div>
+      <div class="settings-row" id="s-email-row">
+        <span class="settings-key">Account</span>
+        <span id="s-email" class="settings-val mono"></span>
+      </div>
+      <div class="settings-row" id="s-mode-row">
+        <span class="settings-key">Activation</span>
+        <span id="s-mode" class="settings-val"></span>
+      </div>
+      <button id="s-deactivate-btn" class="deactivate-btn" onclick="deactivateLicense()">
+        Deactivate this Mac
+      </button>
+    </section>
+
+    <div class="settings-divider"></div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">Storage</div>
+      <div class="settings-row">
+        <span class="settings-key">Workflows</span>
+        <span class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/workflows.json</span>
+      </div>
+      <div class="settings-row" id="s-license-file-row">
+        <span class="settings-key">License</span>
+        <span class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/license.key</span>
+      </div>
+    </section>
+
+    <button class="done-btn" onclick="closeSettings()">Done</button>
+  </div>
+</div>
+
+<!-- ── Update toast ── -->
+<div id="update-toast" style="display:none;position:absolute;bottom:16px;left:12px;right:12px;background:rgba(30,58,95,0.96);border:0.5px solid rgba(212,175,106,0.3);border-radius:10px;padding:12px 14px;flex-direction:row;align-items:center;gap:10px;z-index:200;backdrop-filter:blur(12px);">
+  <div style="flex:1;font-family:var(--font-ui);font-size:12px;color:var(--helm-chalk);line-height:1.4"><span id="update-version"></span> is ready to install.</div>
+  <button onclick="window.api.installUpdate()" style="font-family:var(--font-ui);font-size:11px;font-weight:600;color:var(--helm-gold);background:none;border:0.5px solid rgba(212,175,106,0.4);border-radius:6px;padding:4px 10px;cursor:pointer;">Restart</button>
+  <button onclick="document.getElementById('update-toast').style.display='none'" style="font-family:var(--font-ui);font-size:11px;color:var(--helm-fog);background:none;border:none;cursor:pointer;padding:4px 6px;">Later</button>
+</div>
+
+<!-- ── LIST VIEW ── -->
+<div id="view-list" class="view active">
+  <header class="helm-header">
+    <div class="helm-header-left">
+      <!-- wheel injected by JS -->
+      <span class="wordmark">Helm</span>
+      <span class="pro-badge" id="pro-badge">PRO</span>
+    </div>
+    <div class="status-indicator" id="status-indicator">
+      <span class="status-dot green" id="status-dot"></span>
+      <span id="status-label">Ready</span>
+    </div>
+  </header>
+
+  <div class="section-label">Workflows</div>
+
+  <div class="workflow-list" id="workflow-list">
+    <div class="empty-state">No workflows yet.</div>
+  </div>
+
+  <div id="license-revoked-card" style="display:none;margin:0 12px 8px;padding:12px;border:0.5px solid var(--helm-alert);border-radius:var(--r-card);background:rgba(255,69,58,0.06)">
+    <div style="font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--helm-chalk);margin-bottom:4px">Authorization Suspended</div>
+    <div style="font-family:var(--font-ui);font-size:11px;color:var(--helm-fog);line-height:1.5">Device allocation limit reached (2/2). Contact support to transfer license allocations.</div>
+  </div>
+
+  <footer class="helm-footer">
+    <button class="footer-btn muted" onclick="showSettings()">Settings</button>
+    <button class="add-btn" id="add-btn" onclick="startCapture()">
+      <svg class="lock-icon" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      + Add a workflow
+    </button>
+  </footer>
+</div>
+
+<!-- ── CAPTURE VIEW ── -->
+<div id="view-capture" class="view">
+  <div class="capture-header">
+    <div class="capture-title">
+      <!-- scanning wheel injected by JS -->
+      <span id="capture-title-text">Captured state</span>
+    </div>
+    <button class="ghost-btn" onclick="cancelCapture()">Cancel</button>
+  </div>
+
+  <div class="section-label" id="capture-section-label">Scanning</div>
+
+  <div class="select-bar" id="select-bar" style="display:none">
+    <span class="select-bar-label" id="select-count"></span>
+    <button class="select-bar-toggle" id="select-toggle" onclick="toggleSelectAll()"></button>
+  </div>
+
+  <div class="preview-scroll" id="preview-list"></div>
+
+  <div class="capture-form" id="capture-form" style="display:none">
+    <div class="section-label">Name this workflow</div>
+    <input class="helm-input" id="workflow-name" type="text" placeholder="e.g. Morning stack" maxlength="40"/>
+    <button class="primary-btn" id="btn-save" onclick="saveWorkflow()">Save workflow</button>
+  </div>
+</div>
+
+<script>
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  function makeWheel(size, colorClass, spinClass) {
+    const tpl = document.getElementById('wheel-tpl').content.cloneNode(true);
+    const svg = tpl.querySelector('svg');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.classList.add(colorClass, spinClass);
+    return svg;
+  }
+
+  function showView(id) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function slug(str) {
+    return str.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+
+  function truncateUrl(url, max = 42) {
+    if (!url) return '';
+    try {
+      const u = new URL(url);
+      const s = u.hostname + u.pathname.replace(/\/$/, '');
+      return s.length > max ? s.slice(0, max) + '…' : s;
+    } catch(e) {
+      return url.length > max ? url.slice(0, max) + '…' : url;
+    }
+  }
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('visible');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('visible'), 2400);
+  }
+
+  function setStatus(state) {
+    const dot   = document.getElementById('status-dot');
+    const label = document.getElementById('status-label');
+    if (state === 'ready') {
+      dot.className = 'status-dot green';
+      label.textContent = 'Ready';
+    } else if (state === 'launching') {
+      dot.className = 'status-dot gold';
+      label.textContent = 'Launching';
+    }
+  }
+
+  // ── Inject header wheel ───────────────────────────────────────────────────
+
+  (function() {
+    const wheel = makeWheel(18, 'wheel-gold', 'wheel-slow');
+    const left  = document.querySelector('.helm-header-left');
+    left.insertBefore(wheel, left.firstChild);
+  })();
+
+  // ── Workflow list ─────────────────────────────────────────────────────────
+
+  async function loadWorkflows() {
+    const workflows = await window.api.getWorkflows();
+    const list = document.getElementById('workflow-list');
+
+    if (!workflows.length) {
+      list.innerHTML = '<div class="empty-state">No workflows yet.</div>';
+      updateAddButton();
+      return;
+    }
+
+    list.innerHTML = '';
+    workflows.forEach(w => {
+      const row = document.createElement('div');
+      row.className = 'workflow-row';
+      row.id = 'row-' + w.id;
+
+      const uniqueApps = [...new Set(w.apps.map(a => a.name))].join(' · ');
+
+      const btn = document.createElement('div');
+      btn.className = 'run-btn';
+      btn.id = 'runbtn-' + w.id;
+      const triangle = document.createElement('div');
+      triangle.className = 'play-triangle';
+      btn.appendChild(triangle);
+      btn.addEventListener('click', () => runWorkflow(w.id));
+
+      const info = document.createElement('div');
+      info.className = 'row-info';
+
+      const nameEl = document.createElement('div');
+      nameEl.className = 'row-name';
+      nameEl.textContent = w.name;
+
+      const summaryEl = document.createElement('div');
+      summaryEl.className = 'row-summary';
+      summaryEl.id = 'summary-' + w.id;
+      summaryEl.textContent = uniqueApps;
+
+      info.appendChild(nameEl);
+      info.appendChild(summaryEl);
+
+      const editBtn = document.createElement('button');
+      editBtn.className = 'edit-btn';
+      editBtn.title = 'Edit';
+      editBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>`;
+      editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEdit(w); });
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'delete-btn';
+      deleteBtn.title = 'Delete';
+      deleteBtn.innerHTML = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>`;
+      deleteBtn.addEventListener('click', (e) => { e.stopPropagation(); confirmDelete(w); });
+
+      row.appendChild(btn);
+      row.appendChild(info);
+      row.appendChild(editBtn);
+      row.appendChild(deleteBtn);
+      list.appendChild(row);
+    });
+    updateAddButton();
+  }
+
+  async function runWorkflow(id) {
+    const list   = document.getElementById('workflow-list');
+    const row    = document.getElementById('row-' + id);
+    const btn    = document.getElementById('runbtn-' + id);
+
+    // Switch to running state
+    list.classList.add('is-launching');
+    row.classList.add('active-target');
+    setStatus('launching');
+
+    // Swap run button to spinning green wheel
+    btn.innerHTML = '';
+    btn.classList.add('running');
+    const spinWheel = makeWheel(18, 'wheel-green', 'wheel-fast');
+    btn.appendChild(spinWheel);
+
+    await window.api.runWorkflow(id);
+
+    // Reset after launch
+    setTimeout(() => {
+      list.classList.remove('is-launching');
+      row.classList.remove('active-target');
+      btn.classList.remove('running');
+      btn.innerHTML = '<div class="play-triangle"></div>';
+      btn.addEventListener('click', () => runWorkflow(id), { once: true });
+      setStatus('ready');
+      showToast('Your stack is ready.');
+    }, 2400);
+  }
+
+  // ── Capture flow ──────────────────────────────────────────────────────────
+
+  let capturedApps = [];
+
+  async function startCapture() {
+    const count = document.querySelectorAll('.workflow-row').length;
+    if (!isPro && count >= FREE_LIMIT) {
+      showUpgrade(null);
+      return;
+    }
+    showView('view-capture');
+
+    // Fast-spinning wheel while scanning
+    const titleEl = document.getElementById('capture-title-text');
+    const titleParent = titleEl.parentElement;
+    const existingWheel = titleParent.querySelector('.wheel-icon');
+    if (!existingWheel) {
+      const w = makeWheel(16, 'wheel-gold', 'wheel-fast');
+      titleParent.insertBefore(w, titleEl);
+    } else {
+      existingWheel.classList.replace('wheel-slow', 'wheel-fast');
+    }
+
+    titleEl.textContent = 'Captured state';
+    document.getElementById('capture-section-label').textContent = 'Scanning';
+    document.getElementById('preview-list').innerHTML = '';
+    document.getElementById('capture-form').style.display = 'none';
+    document.getElementById('select-bar').style.display = 'none';
+
+    const result = await window.api.captureState();
+
+    // Slow wheel back down
+    const w = titleParent.querySelector('.wheel-icon');
+    if (w) w.classList.replace('wheel-fast', 'wheel-slow');
+
+    if (!result.ok) {
+      document.getElementById('capture-section-label').textContent = 'Error';
+      const errEl = document.createElement('div');
+      errEl.className = 'empty-state';
+      errEl.textContent = "Couldn't capture. " + (result.error ?? '');
+      document.getElementById('preview-list').replaceChildren(errEl);
+      return;
+    }
+
+    capturedApps = result.apps;
+    renderPreview();
+  }
+
+  // selectedSet tracks indices of selected items (all selected by default)
+  let selectedSet = new Set();
+
+  function renderPreview(preserveSelection = false) {
+    const count = capturedApps.length;
+    document.getElementById('capture-section-label').textContent =
+      `${count} item${count !== 1 ? 's' : ''} detected`;
+
+    if (!preserveSelection) {
+      selectedSet = new Set(capturedApps.map((_, i) => i)); // all selected
+    }
+
+    const listEl = document.getElementById('preview-list');
+    if (!count) {
+      listEl.innerHTML = '<div class="empty-state">No apps detected.</div>';
+      document.getElementById('select-bar').style.display = 'none';
+    } else {
+      listEl.innerHTML = '';
+      capturedApps.forEach((a, i) => {
+        const row = document.createElement('div');
+        row.className = 'preview-item' + (selectedSet.has(i) ? '' : ' deselected');
+        row.dataset.index = i;
+        row.innerHTML = `
+          <div class="item-check">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#0A1628" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>`;
+
+        const appSpan = document.createElement('span');
+        appSpan.className = 'preview-app';
+        appSpan.textContent = a.name;
+
+        const urlSpan = document.createElement('span');
+        urlSpan.className = 'preview-url';
+        urlSpan.textContent = a.label ? a.label : (a.urlToOpen ? truncateUrl(a.urlToOpen) : '');
+
+        row.appendChild(appSpan);
+        row.appendChild(urlSpan);
+        row.addEventListener('click', () => toggleItem(i));
+        listEl.appendChild(row);
+      });
+
+      document.getElementById('select-bar').style.display = 'flex';
+      updateSelectBar();
+    }
+
+    const form = document.getElementById('capture-form');
+    form.style.display = 'block';
+
+    const input = document.getElementById('workflow-name');
+    if (!preserveSelection) input.value = '';
+    setTimeout(() => input.focus(), 50);
+    input.onkeydown = e => { if (e.key === 'Enter') saveWorkflow(); };
+  }
+
+  function toggleItem(i) {
+    if (selectedSet.has(i)) selectedSet.delete(i);
+    else selectedSet.add(i);
+
+    const row = document.querySelector(`.preview-item[data-index="${i}"]`);
+    if (row) row.classList.toggle('deselected', !selectedSet.has(i));
+    updateSelectBar();
+  }
+
+  function updateSelectBar() {
+    const total    = capturedApps.length;
+    const selected = selectedSet.size;
+    document.getElementById('select-count').textContent =
+      `${selected} of ${total} selected`;
+    document.getElementById('select-toggle').textContent =
+      selected === total ? 'Deselect all' : 'Select all';
+  }
+
+  function toggleSelectAll() {
+    if (selectedSet.size === capturedApps.length) {
+      selectedSet.clear();
+    } else {
+      capturedApps.forEach((_, i) => selectedSet.add(i));
+    }
+    document.querySelectorAll('.preview-item[data-index]').forEach(row => {
+      const i = parseInt(row.dataset.index);
+      row.classList.toggle('deselected', !selectedSet.has(i));
+    });
+    updateSelectBar();
+  }
+
+  async function saveWorkflow() {
+    const input = document.getElementById('workflow-name');
+    const name  = input.value.trim();
+    if (!name) { input.focus(); return; }
+
+    const btn = document.getElementById('btn-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+
+    const selectedApps = capturedApps.filter((_, i) => selectedSet.has(i));
+    if (!selectedApps.length) { input.focus(); return; }
+
+    const workflow = {
+      id:   editingWorkflowId || slug(name) + '-' + Date.now(),
+      name,
+      apps: selectedApps,
+    };
+
+    const result = await window.api.saveWorkflow(workflow);
+
+    btn.disabled = false;
+    btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
+
+    if (result.ok) {
+      const msg = editingWorkflowId ? 'Changes saved.' : 'Workflow saved.';
+      cancelCapture();
+      await loadWorkflows();
+      showToast(msg);
+    } else if (result.reason === 'upgrade') {
+      showUpgrade(() => saveWorkflow());
+    }
+  }
+
+  function cancelCapture() {
+    capturedApps = [];
+    editingWorkflowId = null;
+    showView('view-list');
+  }
+
+  // ── Edit flow ─────────────────────────────────────────────────────────────
+
+  let editingWorkflowId = null;
+
+  function openEdit(workflow) {
+    editingWorkflowId = workflow.id;
+    capturedApps = workflow.apps;
+
+    showView('view-capture');
+
+    // Slow wheel in header
+    const titleEl = document.getElementById('capture-title-text');
+    const titleParent = titleEl.parentElement;
+    const existingWheel = titleParent.querySelector('.wheel-icon');
+    if (!existingWheel) {
+      const w = makeWheel(16, 'wheel-gold', 'wheel-slow');
+      titleParent.insertBefore(w, titleEl);
+    } else {
+      existingWheel.classList.replace('wheel-fast', 'wheel-slow');
+    }
+
+    titleEl.textContent = 'Edit workflow';
+    document.getElementById('capture-section-label').textContent =
+      `${capturedApps.length} item${capturedApps.length !== 1 ? 's' : ''}`;
+
+    renderPreview(false);
+
+    const input = document.getElementById('workflow-name');
+    input.value = workflow.name;
+
+    const saveBtn = document.getElementById('btn-save');
+    saveBtn.textContent = 'Save changes';
+  }
+
+  // ── Delete flow ───────────────────────────────────────────────────────────
+
+  let pendingDeleteId = null;
+  let deleteTimer = null;
+
+  function confirmDelete(workflow) {
+    if (pendingDeleteId === workflow.id) return;
+    pendingDeleteId = workflow.id;
+
+    const el = document.getElementById('toast');
+    el.innerHTML = '';
+    const msg = document.createTextNode('Deleting "' + workflow.name + '" — ');
+    const undoBtn = document.createElement('button');
+    undoBtn.id = 'undo-delete';
+    undoBtn.setAttribute('style', 'background:none;border:none;color:var(--helm-gold);font:inherit;font-weight:600;cursor:pointer;padding:0');
+    undoBtn.textContent = 'Undo';
+    el.appendChild(msg);
+    el.appendChild(undoBtn);
+    el.classList.add('visible');
+
+    undoBtn.addEventListener('click', () => {
+      clearTimeout(deleteTimer);
+      pendingDeleteId = null;
+      el.classList.remove('visible');
+    });
+
+    deleteTimer = setTimeout(async () => {
+      el.classList.remove('visible');
+      if (pendingDeleteId !== workflow.id) return;
+      pendingDeleteId = null;
+      await window.api.deleteWorkflow(workflow.id);
+      await loadWorkflows();
+      showToast('Workflow deleted.');
+    }, 3000);
+  }
+
+  // ── License / Pro state ───────────────────────────────────────────────────
+
+  const FREE_LIMIT = 2;
+
+  let isPro = false;
+
+  function setProState(pro) {
+    isPro = pro;
+    const badge = document.getElementById('pro-badge');
+    if (pro) badge.classList.add('visible');
+    else badge.classList.remove('visible');
+    updateAddButton();
+  }
+
+  function updateAddButton() {
+    const btn = document.getElementById('add-btn');
+    const count = document.querySelectorAll('.workflow-row').length;
+    if (!isPro && count >= FREE_LIMIT) btn.classList.add('at-limit');
+    else btn.classList.remove('at-limit');
+  }
+
+  // ── Upgrade overlay ───────────────────────────────────────────────────────
+
+  let pendingSaveAfterUpgrade = null;
+
+  function showUpgrade(onSuccess) {
+    pendingSaveAfterUpgrade = onSuccess || null;
+    // Inject wheel into overlay
+    const wheelSlot = document.getElementById('upgrade-wheel');
+    if (!wheelSlot.querySelector('svg')) {
+      wheelSlot.appendChild(makeWheel(32, 'wheel-gold', 'wheel-slow'));
+    }
+    document.getElementById('upgrade-overlay').classList.add('visible');
+  }
+
+  function closeUpgrade() {
+    document.getElementById('upgrade-overlay').classList.remove('visible');
+    document.getElementById('key-row').classList.remove('visible');
+    document.getElementById('key-error').classList.remove('visible');
+    document.getElementById('license-input').value = '';
+    pendingSaveAfterUpgrade = null;
+  }
+
+  async function buyPro() {
+    const url = await window.api.getStripeUrl();
+    if (url) window.api.openExternal(url);
+    showKeyEntry();
+  }
+
+  function showKeyEntry() {
+    document.getElementById('key-row').classList.add('visible');
+    setTimeout(() => document.getElementById('license-input').focus(), 50);
+  }
+
+  async function activateKey() {
+    const key = document.getElementById('license-input').value.trim();
+    const errEl = document.getElementById('key-error');
+    const btn = document.getElementById('activate-btn');
+    errEl.classList.remove('visible');
+    if (!key) return;
+
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+
+    const result = await window.api.validateLicense(key);
+
+    btn.disabled = false;
+    btn.textContent = 'Activate';
+
+    if (result.ok) {
+      setProState(true);
+      closeUpgrade();
+      if (result.offline) {
+        showToast('Activation connection unavailable. Operating in offline mode.');
+      } else {
+        showToast('Helm Pro activated. Welcome aboard.');
+      }
+      if (pendingSaveAfterUpgrade) {
+        pendingSaveAfterUpgrade();
+        pendingSaveAfterUpgrade = null;
+      }
+    } else {
+      errEl.textContent = result.reason === 'limit_reached'
+        ? 'Device allocation limit reached (2/2). Authorization denied.'
+        : 'That key doesn\'t look right. Check for typos.';
+      errEl.classList.add('visible');
+    }
+  }
+
+  window.api.onLicenseActivated(({ email }) => {
+    setProState(true);
+    showToast('Helm Pro activated.');
+  });
+
+  window.api.onUpdateDownloaded(({ releaseName }) => {
+    const toast = document.getElementById('update-toast');
+    if (toast) {
+      document.getElementById('update-version').textContent = releaseName || 'a new version';
+      toast.style.display = 'flex';
+    }
+  });
+
+  window.api.onLicenseStatusChanged(({ reason }) => {
+    if (reason === 'limit_reached') {
+      setProState(false);
+      const card = document.getElementById('license-revoked-card');
+      if (card) card.style.display = 'block';
+    }
+  });
+
+  // ── Window visibility / animation throttling ─────────────────────────────
+
+  document.addEventListener('DOMContentLoaded', () => {
+    let currentVisibility = 'hidden';
+
+    const applyWheelState = () => {
+      const headerWheel = document.querySelector('.helm-header-left .wheel-icon');
+      if (headerWheel) headerWheel.style.animationPlayState =
+        currentVisibility === 'hidden' ? 'paused' : 'running';
+    };
+
+    applyWheelState(); // initialize paused — app boots hidden before IPC can fire
+
+    window.api.onWindowVisibility(state => {
+      currentVisibility = state;
+      applyWheelState();
+    });
+  });
+
+  // ── Boot ──────────────────────────────────────────────────────────────────
+  (async () => {
+    const status = await window.api.getLicenseStatus();
+    setProState(status.isPro);
+    await loadWorkflows();
+  })();
+
+  // ── Settings panel ────────────────────────────────────────────────────────
+  let userHomedir = '~';
+
+  async function showSettings() {
+    const status = await window.api.getLicenseStatus();
+    userHomedir = status.homedir ?? '~';
+
+    const el = id => document.getElementById(id);
+    el('s-status').textContent = status.isPro ? 'Helm Pro' : 'Free plan';
+    el('s-status').style.color = status.isPro ? 'var(--helm-gold)' : 'var(--helm-fog)';
+
+    el('s-email-row').style.display        = status.isPro && status.email ? 'flex' : 'none';
+    el('s-email').textContent              = status.email ?? '';
+    el('s-mode-row').style.display         = status.isPro ? 'flex' : 'none';
+    el('s-mode').textContent               = status.offline ? 'Offline' : 'Verified';
+    el('s-deactivate-btn').style.display   = status.isPro ? 'block' : 'none';
+    el('s-license-file-row').style.display = status.isPro ? 'flex' : 'none';
+
+    document.getElementById('settings-overlay').classList.add('visible');
+  }
+
+  function closeSettings() {
+    document.getElementById('settings-overlay').classList.remove('visible');
+  }
+
+  function copyPath(el) {
+    navigator.clipboard.writeText(el.textContent.trim().replace('~', userHomedir));
+    showToast('Path copied.');
+  }
+
+  async function deactivateLicense() {
+    await window.api.deactivateLicense();
+    closeSettings();
+    location.reload();
+  }
+</script>
+</body>
+</html>

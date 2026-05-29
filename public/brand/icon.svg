@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <radialGradient id="bgGrad" cx="50%" cy="35%" r="65%">
+      <stop offset="0%" stop-color="#1E3A5F"/>
+      <stop offset="100%" stop-color="#0A1628"/>
+    </radialGradient>
+    <radialGradient id="wheelGrad" cx="50%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#D4AF6A"/>
+      <stop offset="60%" stop-color="#B8922A"/>
+      <stop offset="100%" stop-color="#8B6914"/>
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000" flood-opacity="0.4"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded rect -->
+  <rect width="1024" height="1024" rx="230" fill="url(#bgGrad)"/>
+
+  <!-- Subtle inner vignette ring -->
+  <circle cx="512" cy="512" r="460" fill="none" stroke="#ffffff" stroke-width="1" opacity="0.05"/>
+
+  <!-- HELM WHEEL — centered at 512,512 -->
+  <g transform="translate(512,512)" filter="url(#shadow)">
+
+    <!-- Outer ring -->
+    <circle r="310" fill="none" stroke="url(#wheelGrad)" stroke-width="42"/>
+
+    <!-- Hub center circle -->
+    <circle r="72" fill="url(#wheelGrad)"/>
+    <circle r="44" fill="#0A1628"/>
+    <circle r="20" fill="url(#wheelGrad)"/>
+
+    <!-- 8 spokes, evenly spaced -->
+    <g stroke="url(#wheelGrad)" stroke-width="38" stroke-linecap="round">
+      <!-- Each spoke runs from hub edge (r=72) to inner ring (r=268) -->
+      <line x1="0"   y1="-72"  x2="0"   y2="-268"/>
+      <line x1="0"   y1="72"   x2="0"   y2="268"/>
+      <line x1="-72" y1="0"    x2="-268" y2="0"/>
+      <line x1="72"  y1="0"    x2="268"  y2="0"/>
+      <line x1="-51" y1="-51"  x2="-190" y2="-190"/>
+      <line x1="51"  y1="-51"  x2="190"  y2="-190"/>
+      <line x1="-51" y1="51"   x2="-190" y2="190"/>
+      <line x1="51"  y1="51"   x2="190"  y2="190"/>
+    </g>
+
+    <!-- 8 handle pegs on outer ring -->
+    <g fill="url(#wheelGrad)">
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(0)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(45)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(90)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(135)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(180)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(225)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(270)"/>
+      <ellipse cx="0"    cy="-310" rx="18" ry="30" transform="rotate(315)"/>
+    </g>
+
+  </g>
+
+  <!-- Subtle gold sheen at top -->
+  <ellipse cx="512" cy="180" rx="320" ry="80" fill="#D4AF6A" opacity="0.04"/>
+</svg>
