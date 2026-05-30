@@ -24,8 +24,12 @@
 ## Beta distribution
 
 - [ ] Upload DMG to Google Drive / Dropbox and share download link with testers (iMessage/AirDrop for nearby testers)
-- [ ] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
+- [x] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
 - [ ] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
+
+## Future features
+
+- [ ] Spotify Web API integration — OAuth login to browse + save specific playlists (not just current track); requires Spotify Developer app + token refresh flow
 
 ## Before public launch (needs external accounts)
 

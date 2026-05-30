@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('api', {
   getAccessibility:       ()  => ipcRenderer.invoke('get-accessibility'),
   requestAccessibility:   ()  => ipcRenderer.invoke('request-accessibility'),
   sendFeedback:           (o) => ipcRenderer.invoke('send-feedback', o),
+  setHotkey:              (id, accelerator) => ipcRenderer.invoke('set-hotkey', id, accelerator),
   onLicenseActivated:     (cb) => ipcRenderer.on('license-activated',      (_, data) => cb(data)),
   onLicenseStatusChanged: (cb) => ipcRenderer.on('license-status-changed', (_, data) => cb(data)),
   onUpdateDownloaded:     (cb) => ipcRenderer.on('update-downloaded',      (_, data) => cb(data)),

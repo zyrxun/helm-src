@@ -1,6 +1,6 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater, systemPreferences } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, autoUpdater, systemPreferences, globalShortcut } = require('electron');
 
 const Sentry = require('@sentry/electron/main');
 if (process.env.SENTRY_DSN) {
@@ -45,7 +45,18 @@ function createTrayIcon() {
 }
 
 function hasAccessibility() {
-  return systemPreferences.isTrustedAccessibilityClient(false);
+  // isTrustedAccessibilityClient is unreliable for unsigned apps — it checks
+  // code signatures and returns false even when TCC has granted access.
+  // Instead, attempt an actual accessibility API call and treat success as granted.
+  try {
+    const { execFileSync } = require('child_process');
+    execFileSync('osascript', ['-l', 'JavaScript', '-e',
+      'Application("System Events").processes.whose({backgroundOnly:false}).name()'],
+      { timeout: 3000, stdio: 'pipe' });
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 function requestAccessibility() {
@@ -114,6 +125,11 @@ app.whenReady().then(async () => {
   tray = new Tray(createTrayIcon());
   tray.setToolTip('Helm');
   tray.on('click', toggleWindow);
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Helm', click: toggleWindow },
+    { type: 'separator' },
+    { label: 'Quit', click: () => app.quit() },
+  ]));
 
   win = new BrowserWindow({
     width: 320,
@@ -143,6 +159,7 @@ app.whenReady().then(async () => {
   win.on('closed', () => { win = null; });
 
   app.dock.hide();
+  registerWorkflowShortcuts();
 
   // Show welcome window on first ever launch
   const fs = require('fs');
@@ -210,11 +227,18 @@ function validateWorkflow(w) {
   return true;
 }
 
-// ── IPC handlers ──────────────────────────────────────────────────────────────
+// ── Hotkey helpers ────────────────────────────────────────────────────────────
 
-ipcMain.handle('get-workflows', () => storage.load());
+function validateHotkeyStr(hotkey) {
+  if (!hotkey) return true;
+  if (typeof hotkey !== 'string' || hotkey.length > 60) return false;
+  const hasModifier = ['Command','Control','Alt','Shift'].some(m => hotkey.includes(m));
+  if (!hasModifier) return false;
+  if (hotkey.endsWith('+')) return false;
+  return /^[A-Za-z0-9+]+$/.test(hotkey);
+}
 
-ipcMain.handle('run-workflow', (_, workflowId) => {
+function runWorkflowById(workflowId) {
   if (!isSafeId(workflowId)) return { ok: false, error: 'Invalid workflow id' };
   if (!hasAccessibility()) return { ok: false, error: 'accessibility_denied' };
 
@@ -223,11 +247,9 @@ ipcMain.handle('run-workflow', (_, workflowId) => {
   if (!workflow) return { ok: false, error: 'Workflow not found' };
 
   workflow.apps.forEach(appTarget => {
-    // Validate stored data before passing to shell — defense in depth
     if (!isSafeString(appTarget.name, 128)) return;
     const url = (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen))
       ? appTarget.urlToOpen : '';
-    // execFile avoids shell interpretation entirely — no injection possible
     execFile(
       'osascript',
       ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url],
@@ -236,15 +258,36 @@ ipcMain.handle('run-workflow', (_, workflowId) => {
     );
   });
   return { ok: true };
-});
+}
+
+function registerWorkflowShortcuts() {
+  globalShortcut.unregisterAll();
+  storage.load().forEach(w => {
+    if (!w.hotkey) return;
+    try {
+      globalShortcut.register(w.hotkey, () => runWorkflowById(w.id));
+    } catch (e) {
+      console.error('[shortcut] failed to register', w.hotkey, e.message);
+    }
+  });
+}
+
+// ── IPC handlers ──────────────────────────────────────────────────────────────
+
+ipcMain.handle('get-workflows', () => storage.load());
+
+ipcMain.handle('run-workflow', (_, workflowId) => runWorkflowById(workflowId));
 
 ipcMain.handle('capture-state', () => {
   return new Promise(resolve => {
     execFile(
       'osascript', ['-l', 'JavaScript', jxaPath('capture.jxa')],
-      { maxBuffer: 1024 * 1024 * 10 },
+      { maxBuffer: 1024 * 1024 * 10, timeout: 8000 },
       (err, stdout) => {
-        if (err) return resolve({ ok: false, error: err.message });
+        if (err) {
+          const isTimeout = err.killed || err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT';
+          return resolve({ ok: false, error: isTimeout ? 'Scan timed out' : err.message });
+        }
         try {
           const data = JSON.parse(stdout.trim());
           // Strip any URLs that aren't http/https — Spotify track IDs, chrome://, etc.
@@ -265,38 +308,63 @@ ipcMain.handle('capture-state', () => {
 });
 
 ipcMain.handle('save-workflow', (_, workflow) => {
-  if (!validateWorkflow(workflow)) return { ok: false, reason: 'invalid_input' };
+  try {
+    if (!validateWorkflow(workflow)) return { ok: false, reason: 'invalid_input' };
 
-  const workflows = storage.load();
-  const idx = workflows.findIndex(w => w.id === workflow.id);
-  const isNew = idx < 0;
+    const workflows = storage.load();
+    const idx = workflows.findIndex(w => w.id === workflow.id);
+    const isNew = idx < 0;
 
-  if (isNew && !isUserAuthorized() && workflows.length >= FREE_LIMIT) {
-    return { ok: false, reason: 'upgrade' };
+    if (isNew && !isUserAuthorized() && workflows.length >= FREE_LIMIT) {
+      return { ok: false, reason: 'upgrade' };
+    }
+
+    // Store only the fields we expect — strip any extra keys
+    const existing = idx >= 0 ? workflows[idx] : null;
+    const safe = {
+      id:   workflow.id,
+      name: workflow.name,
+      apps: workflow.apps.map(a => ({
+        name:      a.name,
+        ...(a.urlToOpen ? { urlToOpen: a.urlToOpen } : {}),
+        ...(a.spotifyUri ? { spotifyUri: String(a.spotifyUri).slice(0, 256) } : {}),
+      })),
+      // preserve existing hotkey — save-workflow doesn't touch it
+      ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),
+    };
+
+    if (idx >= 0) workflows[idx] = safe;
+    else workflows.push(safe);
+    storage.save(workflows);
+    registerWorkflowShortcuts();
+    return { ok: true };
+  } catch (e) {
+    console.error('[save-workflow]', e);
+    return { ok: false, reason: 'internal_error' };
   }
-
-  // Store only the fields we expect — strip any extra keys
-  const safe = {
-    id:   workflow.id,
-    name: workflow.name,
-    apps: workflow.apps.map(a => ({
-      name:      a.name,
-      ...(a.urlToOpen ? { urlToOpen: a.urlToOpen } : {}),
-      ...(a.spotifyUri ? { spotifyUri: String(a.spotifyUri).slice(0, 256) } : {}),
-    })),
-  };
-
-  if (idx >= 0) workflows[idx] = safe;
-  else workflows.push(safe);
-  storage.save(workflows);
-  return { ok: true };
 });
 
 ipcMain.handle('delete-workflow', (_, id) => {
   if (!isSafeId(id)) return { ok: false, reason: 'invalid_input' };
   const workflows = storage.load().filter(w => w.id !== id);
   storage.save(workflows);
+  registerWorkflowShortcuts();
   return { ok: true };
+});
+
+ipcMain.handle('set-hotkey', (_, workflowId, accelerator) => {
+  try {
+    if (accelerator && !validateHotkeyStr(accelerator)) return { ok: false, reason: 'invalid' };
+    const workflows = storage.load();
+    const w = workflows.find(w => w.id === workflowId);
+    if (!w) return { ok: false, reason: 'not_found' };
+    if (accelerator) w.hotkey = accelerator; else delete w.hotkey;
+    storage.save(workflows);
+    registerWorkflowShortcuts();
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: 'internal_error' };
+  }
 });
 
 ipcMain.handle('get-license-status', () => ({ isPro, email: proEmail, offline: isOffline, homedir: require('os').homedir() }));
@@ -398,7 +466,8 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
           },
-        }, resolve);
+        }, (res) => { res.resume(); resolve(); });
+        req.setTimeout(8000, () => { req.destroy(); resolve(); });
         req.on('error', resolve);
         req.write(payload);
         req.end();
@@ -408,3 +477,5 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
 
   return { ok: true };
 });
+
+app.on('will-quit', () => globalShortcut.unregisterAll());

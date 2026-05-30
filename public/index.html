@@ -392,6 +392,26 @@
     .delete-btn:hover { border-color: var(--helm-alert); color: var(--helm-alert); }
     .edit-btn svg, .delete-btn svg { display: block; }
 
+    /* ── Hotkey pill ── */
+    .hotkey-pill {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 48px; height: 22px; padding: 0 7px;
+      background: rgba(212,175,106,0.04);
+      border: 0.5px solid rgba(212,175,106,0.25); border-radius: 4px;
+      color: var(--helm-gold); font-family: 'JetBrains Mono', monospace;
+      font-size: 11px; font-weight: 600; cursor: pointer;
+      transition: all 0.15s ease; user-select: none; flex-shrink: 0;
+    }
+    .hotkey-pill:not(.has-hotkey) { color: rgba(212,175,106,0.35); border-style: dashed; }
+    .hotkey-pill:not(.has-hotkey)::after { content: '⌘'; font-size: 10px; }
+    .hotkey-pill:hover { background: rgba(212,175,106,0.1); border-color: var(--helm-gold); }
+    .hotkey-pill.capturing {
+      color: #5eead4; border-color: #5eead4;
+      background: rgba(94,234,212,0.06);
+      animation: hotkey-pulse 1.2s infinite ease-in-out;
+    }
+    @keyframes hotkey-pulse { 0%,100% { opacity:1; } 50% { opacity:0.45; } }
+
     /* ── Toast ── */
     #toast {
       display: none;
@@ -532,6 +552,18 @@
       flex: 1;
     }
 
+    .scan-progress {
+      height: 2px;
+      background: rgba(247,244,239,0.07);
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+    .scan-progress-bar {
+      height: 100%;
+      width: 0%;
+      background: var(--helm-gold);
+      transition: width 0.2s ease;
+    }
     .capture-form {
       padding: 8px 12px 12px;
       flex-shrink: 0;
@@ -813,6 +845,9 @@
   </div>
 
   <div class="section-label" id="capture-section-label">Scanning</div>
+  <div class="scan-progress" id="scan-progress" style="display:none">
+    <div class="scan-progress-bar" id="scan-progress-bar"></div>
+  </div>
 
   <div class="select-bar" id="select-bar" style="display:none">
     <span class="select-bar-label" id="select-count"></span>
@@ -867,6 +902,74 @@
     el.classList.add('visible');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('visible'), 2400);
+  }
+
+  function buildAccelerator(e) {
+    const parts = [];
+    if (e.metaKey)  parts.push('Command');
+    if (e.ctrlKey)  parts.push('Control');
+    if (e.altKey)   parts.push('Alt');
+    if (e.shiftKey) parts.push('Shift');
+    let key = e.key;
+    if (key === ' ')          key = 'Space';
+    if (key === 'ArrowUp')    key = 'Up';
+    if (key === 'ArrowDown')  key = 'Down';
+    if (key === 'ArrowLeft')  key = 'Left';
+    if (key === 'ArrowRight') key = 'Right';
+    if (key.length === 1)     key = key.toUpperCase();
+    parts.push(key);
+    return parts.join('+');
+  }
+
+  function formatHotkey(acc) {
+    if (!acc) return '';
+    return acc
+      .replace(/Command/g, '⌘')
+      .replace(/Shift/g,   '⇧')
+      .replace(/Control/g, '⌃')
+      .replace(/Alt/g,     '⌥')
+      .replace(/Up/g,      '↑')
+      .replace(/Down/g,    '↓')
+      .replace(/Left/g,    '←')
+      .replace(/Right/g,   '→')
+      .replace(/\+/g,      ' ');
+  }
+
+  async function editHotkey(workflowId, currentHotkey) {
+    const pill = document.getElementById('hotkey-' + workflowId);
+    const originalText = pill.textContent;
+    pill.textContent = '…';
+    pill.classList.add('capturing');
+
+    const onKey = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (['Meta','Control','Alt','Shift'].includes(e.key)) return;
+      document.removeEventListener('keydown', onKey, true);
+      pill.classList.remove('capturing');
+
+      if (e.key === 'Escape') {
+        await window.api.setHotkey(workflowId, null);
+        pill.textContent = '';
+        pill.classList.remove('has-hotkey');
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        showToast('Include at least one modifier key (⌘, ⌃, ⌥, ⇧).');
+        pill.textContent = originalText;
+        return;
+      }
+      const accelerator = buildAccelerator(e);
+      const result = await window.api.setHotkey(workflowId, accelerator);
+      if (result.ok) {
+        pill.textContent = formatHotkey(accelerator);
+        pill.classList.add('has-hotkey');
+      } else {
+        showToast('Could not register shortcut — try a different combination.');
+        pill.textContent = originalText;
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
   }
 
   function setStatus(state) {
@@ -932,6 +1035,14 @@
       info.appendChild(nameEl);
       info.appendChild(summaryEl);
 
+      const pill = document.createElement('div');
+      pill.className = 'hotkey-pill' + (w.hotkey ? ' has-hotkey' : '');
+      pill.id = 'hotkey-' + w.id;
+      pill.textContent = w.hotkey ? formatHotkey(w.hotkey) : '';
+      pill.title = w.hotkey ? 'Click to change shortcut' : 'Click to set shortcut';
+      const cachedHotkey = w.hotkey || null;
+      pill.addEventListener('click', (e) => { e.stopPropagation(); editHotkey(w.id, cachedHotkey); });
+
       const editBtn = document.createElement('button');
       editBtn.className = 'edit-btn';
       editBtn.title = 'Edit';
@@ -946,6 +1057,7 @@
 
       row.appendChild(btn);
       row.appendChild(info);
+      row.appendChild(pill);
       row.appendChild(editBtn);
       row.appendChild(deleteBtn);
       list.appendChild(row);
@@ -997,6 +1109,7 @@
   // ── Capture flow ──────────────────────────────────────────────────────────
 
   let capturedApps = [];
+  let captureGen = 0; // incremented on each capture; stale results are discarded
 
   async function startCapture() {
     const count = document.querySelectorAll('.workflow-row').length;
@@ -1023,7 +1136,29 @@
     document.getElementById('capture-form').style.display = 'none';
     document.getElementById('select-bar').style.display = 'none';
 
+    // Animate progress bar: ease to 85% during scan, jump to 100% on done
+    const progressEl = document.getElementById('scan-progress');
+    const progressBar = document.getElementById('scan-progress-bar');
+    progressEl.style.display = 'block';
+    progressBar.style.transition = 'none';
+    progressBar.style.width = '0%';
+    requestAnimationFrame(() => {
+      progressBar.style.transition = 'width 3s cubic-bezier(0.1, 0, 0.3, 1)';
+      progressBar.style.width = '85%';
+    });
+
+    const myGen = ++captureGen;
     const result = await window.api.captureState();
+
+    if (captureGen !== myGen) {
+      progressEl.style.display = 'none';
+      progressBar.style.width = '0%';
+      return; // cancelled while scanning
+    }
+
+    progressBar.style.transition = 'width 0.15s ease';
+    progressBar.style.width = '100%';
+    setTimeout(() => { progressEl.style.display = 'none'; progressBar.style.width = '0%'; }, 200);
 
     // Slow wheel back down
     const w = titleParent.querySelector('.wheel-icon');
@@ -1152,10 +1287,16 @@
       apps: selectedApps,
     };
 
-    const result = await window.api.saveWorkflow(workflow);
-
-    btn.disabled = false;
-    btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
+    let result;
+    try {
+      result = await window.api.saveWorkflow(workflow);
+    } catch (e) {
+      showToast('Save failed: connection error.');
+      return;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
+    }
 
     if (result.ok) {
       const msg = editingWorkflowId ? 'Changes saved.' : 'Workflow saved.';
@@ -1170,6 +1311,7 @@
   }
 
   function cancelCapture() {
+    captureGen++; // invalidate any in-flight captureState promise
     capturedApps = [];
     editingWorkflowId = null;
     showView('view-list');
@@ -1368,9 +1510,20 @@
 
     applyWheelState(); // initialize paused — app boots hidden before IPC can fire
 
-    window.api.onWindowVisibility(state => {
+    window.api.onWindowVisibility(async state => {
       currentVisibility = state;
       applyWheelState();
+      // Re-check accessibility on every show so granting permission is reflected immediately
+      if (state === 'visible') {
+        const hasA11y = await window.api.getAccessibility();
+        const val = document.getElementById('s-accessibility-val');
+        const btn = document.getElementById('s-accessibility-btn');
+        if (val) {
+          val.textContent = hasA11y ? 'Granted' : 'Not granted';
+          val.style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
+        }
+        if (btn) btn.style.display = hasA11y ? 'none' : 'block';
+      }
     });
   });
 

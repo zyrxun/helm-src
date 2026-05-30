@@ -15,25 +15,8 @@ function run() {
   names.forEach(function(name) {
     if (name === "Spotify") {
       try {
-        var spotify = Application("Spotify");
-        if (spotify.running()) {
-          var entry = { name: "Spotify" };
-          try {
-            var state = spotify.playerState();
-            if (state === "playing" || state === "paused") {
-              var track = spotify.currentTrack;
-              var trackId = track.id();
-              var trackName = track.name();
-              var artist = track.artist();
-              if (trackId) {
-                entry.urlToOpen = trackId;
-                entry.label = trackName + (artist ? "  ·  " + artist : "");
-              }
-            }
-          } catch(spotifyErr) { /* track info unavailable */ }
-          result.apps.push(entry);
-        }
-      } catch(e) { /* Spotify not installed */ }
+        if (Application("Spotify").running()) result.apps.push({ name: "Spotify" });
+      } catch(e) {}
       return;
     }
     if (browserNames.indexOf(name) !== -1) {
@@ -41,15 +24,20 @@ function run() {
         var browser = Application(name);
         if (browser.running()) {
           if (name !== "Firefox") {
-            var windows = Object.values(browser.windows());
-            windows.forEach(function(win) {
-              var tabs = Object.values(win.tabs());
-              tabs.forEach(function(tab) {
-                try {
-                  var url = tab.url();
-                  if (url) result.apps.push({ name: name, urlToOpen: url });
-                } catch(tabErr) { /* skip detached tabs */ }
-              });
+            var wins = browser.windows();
+            wins.forEach(function(win) {
+              try {
+                // Invoke specifier as function → resolves to native array in one IPC pass
+                var urls = win.tabs.url();
+                if (urls && urls.length) {
+                  for (var i = 0; i < urls.length; i++) {
+                    var url = urls[i];
+                    if (url && url !== "missing value" && typeof url === "string") {
+                      result.apps.push({ name: name, urlToOpen: url });
+                    }
+                  }
+                }
+              } catch(e) { /* skip unresponsive window */ }
             });
           } else {
             result.apps.push({ name: name });
