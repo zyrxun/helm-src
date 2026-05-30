@@ -1,15 +1,15 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const Sentry = require('@sentry/electron');
+const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater, systemPreferences } = require('electron');
+
+const Sentry = require('@sentry/electron/main');
 if (process.env.SENTRY_DSN) {
   Sentry.init({
     dsn: process.env.SENTRY_DSN,
-    environment: app?.isPackaged ? 'production' : 'development',
+    environment: app.isPackaged ? 'production' : 'development',
     tracesSampleRate: 1.0,
   });
 }
-
-const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater, systemPreferences } = require('electron');
 const { execFile } = require('child_process');
 const path    = require('path');
 
@@ -143,6 +143,22 @@ app.whenReady().then(async () => {
   win.on('closed', () => { win = null; });
 
   app.dock.hide();
+
+  // Show welcome window on first ever launch
+  const fs = require('fs');
+  const welcomedPath = path.join(app.getPath('userData'), 'welcomed');
+  if (!fs.existsSync(welcomedPath)) {
+    fs.writeFileSync(welcomedPath, '1');
+    const welcome = new BrowserWindow({
+      width: 400, height: 520,
+      resizable: false, minimizable: false, maximizable: false,
+      titleBarStyle: 'hiddenInset',
+      backgroundColor: '#0A1628',
+      webPreferences: { contextIsolation: true },
+    });
+    welcome.loadFile(path.join(__dirname, '../public/welcome.html'));
+    welcome.show();
+  }
 
   if (app.isPackaged) {
     const feedUrl = `https://update.electronjs.org/zyrxun/helm-releases/darwin-${process.arch}/${app.getVersion()}`;
