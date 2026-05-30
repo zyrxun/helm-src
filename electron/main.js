@@ -1,5 +1,14 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
+const Sentry = require('@sentry/electron');
+if (process.env.SENTRY_DSN) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    environment: app?.isPackaged ? 'production' : 'development',
+    tracesSampleRate: 1.0,
+  });
+}
+
 const { app, BrowserWindow, Tray, ipcMain, nativeImage, shell, autoUpdater, systemPreferences } = require('electron');
 const { execFile } = require('child_process');
 const path    = require('path');
@@ -313,5 +322,65 @@ ipcMain.handle('deactivate-license', () => {
   if (win && !win.webContents.isDestroyed()) {
     win.webContents.send('license-status-changed', { isPro: false });
   }
+  return { ok: true };
+});
+
+ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
+  if (typeof message !== 'string' || message.trim().length === 0) return { ok: false };
+
+  const os = require('os');
+  const fs = require('fs');
+
+  let logSnippet = '';
+  if (attachLogs) {
+    const logPath = path.join(app.getPath('logs'), 'main.log');
+    try {
+      const raw = fs.readFileSync(logPath, 'utf8');
+      logSnippet = raw.split('\n').slice(-50).join('\n');
+    } catch (_) { logSnippet = '(no log file found)'; }
+  }
+
+  const body = [
+    `Version: ${app.getVersion()}`,
+    `macOS: ${os.release()}`,
+    `Arch: ${process.arch}`,
+    ``,
+    message.trim(),
+    attachLogs ? `\n--- Last 50 log lines ---\n${logSnippet}` : '',
+  ].join('\n');
+
+  if (process.env.SENTRY_DSN) {
+    Sentry.captureMessage(`[Feedback] ${message.trim().slice(0, 120)}`, {
+      level: 'info',
+      extra: { body },
+    });
+  }
+
+  const to = process.env.HELM_FEEDBACK_EMAIL;
+  if (to && process.env.RESEND_API_KEY) {
+    try {
+      const https = require('https');
+      const payload = JSON.stringify({
+        from: 'helm-feedback@helm.app',
+        to,
+        subject: `Helm Beta Feedback — v${app.getVersion()}`,
+        text: body,
+      });
+      await new Promise((resolve) => {
+        const req = https.request({
+          hostname: 'api.resend.com', path: '/emails', method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(payload),
+          },
+        }, resolve);
+        req.on('error', resolve);
+        req.write(payload);
+        req.end();
+      });
+    } catch (_) {}
+  }
+
   return { ok: true };
 });

@@ -6,53 +6,79 @@
   "author": "zyrxun",
   "main": "electron/main.js",
   "scripts": {
-    "build":      "tsc && mkdir -p dist/jxa && cp src/platform/macos/*.jxa dist/jxa/",
-    "menu-bar":   "tsc && electron electron/main.js",
-    "pack":       "electron-builder --mac",
-    "release":    "electron-builder --mac --publish always",
+    "build": "tsc && mkdir -p dist/jxa && cp src/platform/macos/*.jxa dist/jxa/",
+    "menu-bar": "tsc && electron electron/main.js",
+    "pack": "electron-builder --mac",
+    "release": "electron-builder --mac --publish always",
     "build-icon": "bash scripts/build-icon.sh"
   },
   "build": {
-    "appId":       "com.helm.app",
+    "appId": "com.helm.app",
     "productName": "Helm",
     "mac": {
-      "category":         "public.app-category.productivity",
-      "icon":             "public/brand/icon.icns",
-      "hardenedRuntime":  true,
+      "category": "public.app-category.productivity",
+      "icon": "public/brand/icon.icns",
+      "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "entitlements":        "entitlements.mac.plist",
+      "entitlements": "entitlements.mac.plist",
       "entitlementsInherit": "entitlements.mac.plist",
       "target": [
-        { "target": "dmg", "arch": ["universal"] },
-        { "target": "zip", "arch": ["universal"] }
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "universal"
+          ]
+        }
       ]
     },
     "dmg": {
       "background": "public/brand/dmg-background.png",
       "iconSize": 128,
       "contents": [
-        { "x": 130, "y": 220, "type": "file" },
-        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+        {
+          "x": 130,
+          "y": 220,
+          "type": "file"
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
       ]
     },
     "afterSign": "scripts/notarize.js",
     "extraResources": [
-      { "from": "src/platform/macos", "to": "jxa", "filter": ["*.jxa"] }
+      {
+        "from": "src/platform/macos",
+        "to": "jxa",
+        "filter": [
+          "*.jxa"
+        ]
+      }
     ],
     "publish": {
       "provider": "github",
-      "owner":    "zyrxun",
-      "repo":     "helm-releases"
+      "owner": "zyrxun",
+      "repo": "helm-releases"
     }
   },
   "devDependencies": {
-    "@types/node":        "^20.0.0",
     "@electron/notarize": "^2.5.0",
-    "electron":           "^42.3.0",
-    "electron-builder":   "^25.0.0",
-    "typescript":         "^5.0.0"
+    "@types/node": "^20.0.0",
+    "electron": "^42.3.0",
+    "electron-builder": "^25.0.0",
+    "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@sentry/electron": "^7.13.0",
     "dotenv": "^16.0.0"
   }
 }

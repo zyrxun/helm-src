@@ -606,6 +606,12 @@
       padding: 6px 10px; cursor: pointer; margin-top: 4px; text-align: left;
     }
     .deactivate-btn:hover { background: rgba(255,69,58,0.08); border-color: var(--helm-alert); }
+    .feedback-link {
+      font-family: var(--font-ui); font-size: 11px; color: var(--helm-fog);
+      background: none; border: none; cursor: pointer; padding: 4px 0;
+      text-align: center; opacity: 0.5; width: 100%;
+    }
+    .feedback-link:hover { opacity: 1; color: var(--helm-chalk); }
     .settings-toggle {
       font-family: var(--font-ui); font-size: 11px; font-weight: 600;
       padding: 3px 10px; border-radius: 20px; cursor: pointer;
@@ -732,7 +738,27 @@
     </section>
 
     <button class="done-btn" onclick="closeSettings()">Done</button>
+    <button class="feedback-link" onclick="closeSettings(); openFeedback()">Report a bug</button>
   </div>
+</div>
+
+<!-- ── Feedback overlay ── -->
+<div id="feedback-overlay" style="display:none;position:absolute;inset:0;background:rgba(10,22,40,0.97);z-index:300;flex-direction:column;padding:20px 16px;gap:12px;">
+  <div style="display:flex;justify-content:space-between;align-items:center;">
+    <span style="font-family:var(--font-display);font-size:16px;color:var(--helm-gold);font-weight:700;">Report a Bug</span>
+    <button class="icon-btn" onclick="closeFeedback()">✕</button>
+  </div>
+  <textarea id="feedback-text" placeholder="Describe what happened…"
+    style="flex:1;min-height:120px;background:rgba(247,244,239,0.04);border:0.5px solid rgba(247,244,239,0.10);border-radius:var(--r-card);color:var(--helm-chalk);font-family:var(--font-ui);font-size:12px;padding:10px 12px;resize:none;outline:none;"></textarea>
+  <label style="display:flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:12px;color:var(--helm-fog);cursor:pointer;">
+    <input type="checkbox" id="feedback-logs" checked style="accent-color:var(--helm-gold);"/>
+    Attach last 50 lines of app log
+  </label>
+  <button id="feedback-send-btn" onclick="submitFeedback()"
+    style="background:var(--helm-gold);color:#0A1628;font-family:var(--font-ui);font-size:13px;font-weight:700;border:none;border-radius:var(--r-button);padding:10px;cursor:pointer;">
+    Send Report
+  </button>
+  <div id="feedback-status" style="font-family:var(--font-ui);font-size:11px;color:var(--helm-fog);text-align:center;min-height:14px;"></div>
 </div>
 
 <!-- ── Update toast ── -->
@@ -1401,6 +1427,38 @@
 
   function closeSettings() {
     document.getElementById('settings-overlay').classList.remove('visible');
+  }
+
+  function openFeedback() {
+    document.getElementById('feedback-text').value = '';
+    document.getElementById('feedback-status').textContent = '';
+    document.getElementById('feedback-overlay').style.display = 'flex';
+    document.getElementById('feedback-text').focus();
+  }
+
+  function closeFeedback() {
+    document.getElementById('feedback-overlay').style.display = 'none';
+  }
+
+  async function submitFeedback() {
+    const message = document.getElementById('feedback-text').value.trim();
+    if (!message) return;
+    const attachLogs = document.getElementById('feedback-logs').checked;
+    const btn = document.getElementById('feedback-send-btn');
+    const status = document.getElementById('feedback-status');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    const result = await window.api.sendFeedback({ message, attachLogs });
+    if (result.ok) {
+      status.textContent = 'Received. Thank you.';
+      status.style.color = 'var(--helm-green)';
+      setTimeout(closeFeedback, 1500);
+    } else {
+      status.textContent = 'Something went wrong. Try again.';
+      status.style.color = 'var(--helm-alert)';
+      btn.disabled = false;
+      btn.textContent = 'Send Report';
+    }
   }
 
   function copyPath(el) {
