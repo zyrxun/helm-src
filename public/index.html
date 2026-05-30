@@ -1139,7 +1139,12 @@
     btn.textContent = 'Saving…';
 
     const selectedApps = capturedApps.filter((_, i) => selectedSet.has(i));
-    if (!selectedApps.length) { input.focus(); return; }
+    if (!selectedApps.length) {
+      btn.disabled = false;
+      btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
+      showToast('Select at least one app to save.');
+      return;
+    }
 
     const workflow = {
       id:   editingWorkflowId || slug(name) + '-' + Date.now(),
@@ -1159,6 +1164,8 @@
       showToast(msg);
     } else if (result.reason === 'upgrade') {
       showUpgrade(() => saveWorkflow());
+    } else {
+      showToast('Save failed: ' + (result.reason ?? 'unknown error'));
     }
   }
 

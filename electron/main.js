@@ -200,7 +200,7 @@ function validateWorkflow(w) {
   if (!w || typeof w !== 'object') return false;
   if (!isSafeId(w.id))                          return false;
   if (!isSafeString(w.name, 128))               return false;
-  if (!Array.isArray(w.apps) || w.apps.length > 20) return false;
+  if (!Array.isArray(w.apps) || w.apps.length > 100) return false;
   for (const app of w.apps) {
     if (!app || typeof app !== 'object')         return false;
     if (!isSafeString(app.name, 128))            return false;
@@ -247,7 +247,15 @@ ipcMain.handle('capture-state', () => {
         if (err) return resolve({ ok: false, error: err.message });
         try {
           const data = JSON.parse(stdout.trim());
-          resolve({ ok: true, apps: data.apps });
+          // Strip any URLs that aren't http/https — Spotify track IDs, chrome://, etc.
+          const apps = (data.apps || []).map(a => {
+            if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
+              const { urlToOpen, ...rest } = a;
+              return rest;
+            }
+            return a;
+          });
+          resolve({ ok: true, apps });
         } catch (e) {
           resolve({ ok: false, error: 'Failed to parse capture output' });
         }
@@ -377,7 +385,7 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
     try {
       const https = require('https');
       const payload = JSON.stringify({
-        from: 'helm-feedback@helm.app',
+        from: 'Helm Feedback <onboarding@resend.dev>',
         to,
         subject: `Helm Beta Feedback — v${app.getVersion()}`,
         text: body,
