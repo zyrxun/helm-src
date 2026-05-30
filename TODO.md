@@ -21,7 +21,16 @@
 - [ ] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
 - [x] Bundle fonts locally — replace Google Fonts CDN link in `public/index.html` with self-hosted Inter / JetBrains Mono / Playfair Display
 
-## Nice to have before launch
+## Beta distribution
 
-- [ ] Crash / error reporting — add Sentry (free tier, ~10 lines for Electron)
-- [ ] Website / landing page — needed for support, changelog, and purchase link before distributing the DMG
+- [ ] Upload DMG to Google Drive / Dropbox and share download link with testers (iMessage/AirDrop for nearby testers)
+- [ ] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
+- [ ] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
+
+## Before public launch (needs external accounts)
+
+- [ ] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
+- [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
+- [ ] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
+- [ ] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
+- [ ] Website / landing page — needed for support, changelog, and purchase link before distributing to public
