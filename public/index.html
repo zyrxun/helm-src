@@ -1212,7 +1212,21 @@
 
         const urlSpan = document.createElement('span');
         urlSpan.className = 'preview-url';
-        urlSpan.textContent = a.label ? a.label : (a.urlToOpen ? truncateUrl(a.urlToOpen) : '');
+        if (a.name === 'Code' && a.folderPath) {
+          if (a.folderPath.includes('/')) {
+            urlSpan.textContent = '📁 ' + a.folderPath.split('/').pop();
+          } else {
+            const tp = a.folderPath.split(/[—•\-]/);
+            const ctx = tp[tp.length - 1].trim();
+            urlSpan.textContent = '📁 ' + (ctx === 'Visual Studio Code' && tp[0] ? tp[0].trim() : ctx);
+          }
+        } else if (a.name === 'Terminal' && a.folderPath) {
+          urlSpan.textContent = '📂 ' + (a.folderPath.split('/').pop() || a.folderPath);
+        } else if (a.name === 'Notion' && a.urlToOpen) {
+          urlSpan.textContent = a.labelFallback ? '📄 ' + a.labelFallback : '📄 Notion page';
+        } else {
+          urlSpan.textContent = a.label ? a.label : (a.urlToOpen ? truncateUrl(a.urlToOpen) : '');
+        }
 
         row.appendChild(appSpan);
         row.appendChild(urlSpan);

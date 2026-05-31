@@ -1,3 +1,6 @@
+var app = Application.currentApplication();
+app.includeStandardAdditions = true;
+
 function run() {
   var se = Application("System Events");
   var result = { apps: [] };
@@ -13,12 +16,122 @@ function run() {
   ];
 
   names.forEach(function(name) {
+    if (name === "Terminal") {
+      try {
+        var term = Application("Terminal");
+        if (term.running()) {
+          term.windows().forEach(function(win) {
+            win.tabs().forEach(function(tab) {
+              try {
+                var ttyName = tab.tty();
+                if (!ttyName) return;
+                var cleanTty = ttyName.replace("/dev/", "");
+                var shellPid = app.doShellScript(
+                  "ps -o ppid= -t " + cleanTty + " | head -n 1 | awk '{print $1}'"
+                ).trim();
+                if (shellPid) {
+                  var cwd = app.doShellScript(
+                    "lsof -a -p " + shellPid + " -d cwd -Fn 2>/dev/null | grep '^n' | sed 's/^n//'"
+                  ).trim();
+                  if (cwd) result.apps.push({ name: "Terminal", folderPath: String(cwd) });
+                }
+              } catch(e) {}
+            });
+          });
+        }
+      } catch(e) {
+        result.apps.push({ name: "Terminal" });
+      }
+      return;
+    }
+
+    if (name === "Notion") {
+      try {
+        if (se.processes.whose({ name: "Notion" }).length > 0) {
+          var notionWins = se.processes["Notion"].windows();
+          var pushed = false;
+          notionWins.forEach(function(win) {
+            try {
+              var urlPayload = null;
+              if (win.attributes.whose({ name: "AXDocument" }).length > 0)
+                urlPayload = win.attributes["AXDocument"].value();
+              if (!urlPayload && win.attributes.whose({ name: "AXURL" }).length > 0)
+                urlPayload = win.attributes["AXURL"].value();
+              if (urlPayload && String(urlPayload).indexOf("notion.so") !== -1) {
+                var deepLink = String(urlPayload).replace(/^https?:\/\/www\.notion\.so/, "notion://www.notion.so");
+                result.apps.push({ name: "Notion", urlToOpen: deepLink });
+                pushed = true;
+              } else {
+                var title = win.name();
+                if (title && title !== "Notion") {
+                  result.apps.push({
+                    name: "Notion",
+                    urlToOpen: "notion://www.notion.so/",
+                    labelFallback: title.replace(" - Notion", "").trim()
+                  });
+                  pushed = true;
+                }
+              }
+            } catch(e) {}
+          });
+          if (!pushed) result.apps.push({ name: "Notion" });
+        }
+      } catch(e) {
+        result.apps.push({ name: "Notion" });
+      }
+      return;
+    }
+
     if (name === "Spotify") {
       try {
         if (Application("Spotify").running()) result.apps.push({ name: "Spotify" });
       } catch(e) {}
       return;
     }
+
+    if (name === "Code") {
+      if (se.processes.whose({ name: "Code" }).length > 0) {
+        try {
+          var wins = se.processes["Code"].windows();
+          var storagePath = app.pathTo("home folder") +
+            "/Library/Application Support/Code/User/globalStorage/storage.json";
+          var recents = [];
+          try {
+            var parsed = JSON.parse(String(app.read(storagePath)));
+            var workspaces = (parsed.openedPathsList && parsed.openedPathsList.workspaces3) || [];
+            workspaces.forEach(function(e) {
+              var p = typeof e === "string" ? e : (e.folderUri || e.fileUri || "");
+              if (p) recents.push(decodeURIComponent(p.replace(/^file:\/\//, "")));
+            });
+          } catch(e) {}
+
+          wins.forEach(function(win) {
+            try {
+              var title = win.name();
+              if (!title) return;
+              var parts = title.split(/[—•\-]/);
+              var matchedPath = null;
+              for (var i = parts.length - 1; i >= 0; i--) {
+                var label = parts[i].trim()
+                  .replace(/\[SSH:.*?\]|\[Dev Containers.*?\]|\[WSL.*?\]/g, "").trim();
+                if (!label || label === "Visual Studio Code") continue;
+                for (var r = 0; r < recents.length; r++) {
+                  if (recents[r].split("/").pop() === label) { matchedPath = recents[r]; break; }
+                }
+                if (matchedPath) break;
+              }
+              result.apps.push({ name: "Code", folderPath: matchedPath || title });
+            } catch(e) {}
+          });
+        } catch(e) {
+          result.apps.push({ name: "Code" });
+        }
+      } else {
+        result.apps.push({ name: "Code" });
+      }
+      return; // skip generic push — prevents duplicate "Code" entry
+    }
+
     if (browserNames.indexOf(name) !== -1) {
       try {
         var browser = Application(name);

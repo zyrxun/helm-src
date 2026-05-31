@@ -199,7 +199,7 @@ app.whenReady().then(async () => {
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const SAFE_STRING = /^[^\x00-\x1f\x7f"\\`$!|;&<>(){}[\]]*$/; // no shell metacharacters
-const SAFE_URL    = /^https?:\/\//i;
+const SAFE_URL    = /^(https?|notion):\/\//i;
 
 function isSafeString(s, maxLen = 256) {
   return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_STRING.test(s);
@@ -223,6 +223,10 @@ function validateWorkflow(w) {
     if (!isSafeString(app.name, 128))            return false;
     if (app.urlToOpen !== undefined && app.urlToOpen !== null &&
         !isSafeUrl(app.urlToOpen))               return false;
+    if (app.folderPath !== undefined &&
+        !isSafeString(app.folderPath, 512))      return false;
+    if (app.labelFallback !== undefined &&
+        !isSafeString(app.labelFallback, 256))   return false;
   }
   return true;
 }
@@ -248,8 +252,9 @@ function runWorkflowById(workflowId) {
 
   workflow.apps.forEach(appTarget => {
     if (!isSafeString(appTarget.name, 128)) return;
-    const url = (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen))
-      ? appTarget.urlToOpen : '';
+    const url = appTarget.folderPath
+      ? appTarget.folderPath
+      : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
     execFile(
       'osascript',
       ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url],
@@ -328,6 +333,8 @@ ipcMain.handle('save-workflow', (_, workflow) => {
         name:      a.name,
         ...(a.urlToOpen ? { urlToOpen: a.urlToOpen } : {}),
         ...(a.spotifyUri ? { spotifyUri: String(a.spotifyUri).slice(0, 256) } : {}),
+        ...(a.folderPath ? { folderPath: String(a.folderPath).slice(0, 512) } : {}),
+        ...(a.labelFallback ? { labelFallback: String(a.labelFallback).slice(0, 256) } : {}),
       })),
       // preserve existing hotkey — save-workflow doesn't touch it
       ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),

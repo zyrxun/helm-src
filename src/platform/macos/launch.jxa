@@ -2,6 +2,39 @@ function run(argv) {
   var appName = argv[0];
   var urlArg  = argv[1] || null;
 
+  if (appName === "Terminal" && urlArg && !urlArg.match(/^https?:\/\//i)) {
+    try {
+      var terminalApp = Application("Terminal");
+      var safe = urlArg.replace(/'/g, "'\\''");
+      var newWindow = terminalApp.doScript("clear");
+      terminalApp.doScript("cd '" + safe + "'", { in: newWindow });
+      terminalApp.activate();
+      return "Processed Terminal";
+    } catch(e) {
+      var sysApp2 = Application.currentApplication();
+      sysApp2.includeStandardAdditions = true;
+      var safe2 = urlArg.replace(/'/g, "'\\''");
+      sysApp2.doShellScript("open -a Terminal '" + safe2 + "'");
+      return "Processed Terminal";
+    }
+  }
+
+  if (appName === "Notion" && urlArg && urlArg.indexOf("notion://") === 0) {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var safe = urlArg.replace(/'/g, "'\\''");
+    sysApp.doShellScript("open -a 'Notion' '" + safe + "'");
+    return "Processed Notion";
+  }
+
+  if (appName === "Code" && urlArg && !urlArg.match(/^https?:\/\//i)) {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var safe = urlArg.replace(/'/g, "'\\''");
+    sysApp.doShellScript("open -a 'Visual Studio Code' '" + safe + "'");
+    return "Processed Code";
+  }
+
   var app = Application(appName);
   app.includeStandardAdditions = true;
 
