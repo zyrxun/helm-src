@@ -125,11 +125,13 @@ app.whenReady().then(async () => {
   tray = new Tray(createTrayIcon());
   tray.setToolTip('Helm');
   tray.on('click', toggleWindow);
-  tray.setContextMenu(Menu.buildFromTemplate([
-    { label: 'Open Helm', click: toggleWindow },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]));
+  tray.on('right-click', () => {
+    tray.popUpContextMenu(Menu.buildFromTemplate([
+      { label: 'Open Helm', click: toggleWindow },
+      { type: 'separator' },
+      { label: 'Quit', click: () => app.quit() },
+    ]));
+  });
 
   win = new BrowserWindow({
     width: 320,
