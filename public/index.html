@@ -1445,38 +1445,37 @@
 
   // ── Delete flow ───────────────────────────────────────────────────────────
 
-  let pendingDeleteId = null;
-  let deleteTimer = null;
+  const pendingDeletes = new Map(); // id → { timer, name }
 
   function confirmDelete(workflow) {
-    if (pendingDeleteId === workflow.id) return;
-    pendingDeleteId = workflow.id;
+    if (pendingDeletes.has(workflow.id)) return;
+
+    const timer = setTimeout(async () => {
+      pendingDeletes.delete(workflow.id);
+      await window.api.deleteWorkflow(workflow.id);
+      await loadWorkflows();
+      if (pendingDeletes.size === 0) showToast('Workflow deleted.');
+    }, 3000);
+
+    pendingDeletes.set(workflow.id, { timer, name: workflow.name });
 
     const el = document.getElementById('toast');
     el.innerHTML = '';
-    const msg = document.createTextNode('Deleting "' + workflow.name + '" — ');
+    const count = pendingDeletes.size;
+    const label = count > 1 ? `Deleting ${count} workflows — ` : `Deleting "${workflow.name}" — `;
+    const msg = document.createTextNode(label);
     const undoBtn = document.createElement('button');
-    undoBtn.id = 'undo-delete';
     undoBtn.setAttribute('style', 'background:none;border:none;color:var(--helm-gold);font:inherit;font-weight:600;cursor:pointer;padding:0');
-    undoBtn.textContent = 'Undo';
+    undoBtn.textContent = 'Undo all';
     el.appendChild(msg);
     el.appendChild(undoBtn);
     el.classList.add('visible');
 
     undoBtn.addEventListener('click', () => {
-      clearTimeout(deleteTimer);
-      pendingDeleteId = null;
+      for (const { timer } of pendingDeletes.values()) clearTimeout(timer);
+      pendingDeletes.clear();
       el.classList.remove('visible');
     });
-
-    deleteTimer = setTimeout(async () => {
-      el.classList.remove('visible');
-      if (pendingDeleteId !== workflow.id) return;
-      pendingDeleteId = null;
-      await window.api.deleteWorkflow(workflow.id);
-      await loadWorkflows();
-      showToast('Workflow deleted.');
-    }, 3000);
   }
 
   // ── License / Pro state ───────────────────────────────────────────────────
