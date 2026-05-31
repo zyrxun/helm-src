@@ -1455,7 +1455,7 @@
       await window.api.deleteWorkflow(workflow.id);
       await loadWorkflows();
       if (pendingDeletes.size === 0) showToast('Workflow deleted.');
-    }, 3000);
+    }, 1500);
 
     pendingDeletes.set(workflow.id, { timer, name: workflow.name });
 
