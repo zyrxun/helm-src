@@ -16,7 +16,7 @@
 
 ## Needs setup (external services)
 
-- [ ] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
+- [x] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
 - [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
 - [ ] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
 - [x] Bundle fonts locally — replace Google Fonts CDN link in `public/index.html` with self-hosted Inter / JetBrains Mono / Playfair Display
@@ -34,7 +34,8 @@
 
 ## Before public launch (needs external accounts)
 
-- [ ] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
+- [x] Stripe test mode — payment link, webhook, Val.town handler all wired and tested
+- [ ] Stripe livemode — switch to live keys: new payment link, new webhook secret, update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town env vars
 - [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
 - [ ] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [ ] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
