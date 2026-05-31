@@ -201,7 +201,7 @@ app.whenReady().then(async () => {
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const SAFE_STRING = /^[^\x00-\x1f\x7f"\\`$!|;&<>(){}[\]]*$/; // no shell metacharacters
-const SAFE_URL    = /^(https?|notion):\/\//i;
+const SAFE_URL    = /^(https?|notion|slack|figma):\/\//i;
 
 function isSafeString(s, maxLen = 256) {
   return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_STRING.test(s);

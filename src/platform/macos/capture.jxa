@@ -88,8 +88,27 @@ function run() {
 
     if (name === "Spotify") {
       try {
-        if (Application("Spotify").running()) result.apps.push({ name: "Spotify" });
+        var spot = Application("Spotify");
+        if (spot.running()) {
+          var uri = null, spotLabel = null;
+          try {
+            var track = spot.currentTrack;
+            uri      = track.spotifyUrl();
+            spotLabel = track.name() + " — " + track.artist();
+          } catch(e) {}
+          result.apps.push({ name: "Spotify", urlToOpen: uri || undefined, label: spotLabel || undefined });
+        }
       } catch(e) {}
+      return;
+    }
+
+    if (name === "Slack") {
+      result.apps.push({ name: "Slack" });
+      return;
+    }
+
+    if (name === "Figma") {
+      result.apps.push({ name: "Figma" });
       return;
     }
 

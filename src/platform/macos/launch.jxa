@@ -27,6 +27,22 @@ function run(argv) {
     return "Processed Notion";
   }
 
+  if (appName === "Slack" && urlArg) {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var safe = urlArg.replace(/'/g, "'\\''");
+    sysApp.doShellScript("open -a 'Slack' '" + safe + "'");
+    return "Processed Slack";
+  }
+
+  if (appName === "Figma" && urlArg) {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var safe = urlArg.replace(/'/g, "'\\''");
+    sysApp.doShellScript("open -a 'Figma' '" + safe + "'");
+    return "Processed Figma";
+  }
+
   if (appName === "Code" && urlArg && !urlArg.match(/^https?:\/\//i)) {
     var sysApp = Application.currentApplication();
     sysApp.includeStandardAdditions = true;

@@ -1222,6 +1222,54 @@
           }
         } else if (a.name === 'Terminal' && a.folderPath) {
           urlSpan.textContent = '📂 ' + (a.folderPath.split('/').pop() || a.folderPath);
+        } else if (a.name === 'Spotify') {
+          urlSpan.textContent = a.label ? '🎵 ' + a.label : '🎵 Spotify';
+        } else if (a.name === 'Slack') {
+          if (a.urlToOpen) {
+            urlSpan.textContent = '💬 ' + (a.label || 'Slack');
+          } else {
+            const slackApp = a;
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.placeholder = 'Right-click channel → Copy link → paste';
+            inp.className = 'helm-input';
+            inp.style.cssText = 'font-size:11px;padding:2px 6px;height:20px;width:160px;margin-top:0;box-sizing:border-box;';
+            const blockSlack = e => e.stopPropagation();
+            inp.addEventListener('click', blockSlack);
+            inp.addEventListener('mousedown', blockSlack);
+            inp.addEventListener('keydown', blockSlack);
+            inp.addEventListener('input', () => {
+              const val = inp.value.trim();
+              const ok = /^slack:\/\//i.test(val) || /^https?:\/\/(?:[a-z0-9-]+\.)?slack\.com\//i.test(val);
+              if (ok) { slackApp.urlToOpen = val; inp.style.borderColor = 'var(--helm-green)'; }
+              else { delete slackApp.urlToOpen; inp.style.borderColor = ''; }
+            });
+            urlSpan.textContent = '';
+            urlSpan.appendChild(inp);
+          }
+        } else if (a.name === 'Figma') {
+          if (a.urlToOpen) {
+            urlSpan.textContent = '🎨 ' + (a.label || 'Figma');
+          } else {
+            const figmaApp = a;
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.placeholder = 'Share → Copy link → paste';
+            inp.className = 'helm-input';
+            inp.style.cssText = 'font-size:11px;padding:2px 6px;height:20px;width:160px;margin-top:0;box-sizing:border-box;';
+            const blockFigma = e => e.stopPropagation();
+            inp.addEventListener('click', blockFigma);
+            inp.addEventListener('mousedown', blockFigma);
+            inp.addEventListener('keydown', blockFigma);
+            inp.addEventListener('input', () => {
+              const val = inp.value.trim();
+              const ok = /^figma:\/\//i.test(val) || /^https?:\/\/(?:www\.)?figma\.com\//i.test(val);
+              if (ok) { figmaApp.urlToOpen = val; inp.style.borderColor = 'var(--helm-green)'; }
+              else { delete figmaApp.urlToOpen; inp.style.borderColor = ''; }
+            });
+            urlSpan.textContent = '';
+            urlSpan.appendChild(inp);
+          }
         } else if (a.name === 'Notion') {
           if (a.urlToOpen) {
             urlSpan.textContent = a.labelFallback ? '📄 ' + a.labelFallback : '📄 Notion page';
