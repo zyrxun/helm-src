@@ -110,12 +110,12 @@ function run() {
         if (pdfgearPids) {
           var pidArgs = pdfgearPids.split(/\s+/).map(function(p) { return "-p " + p; }).join(" ");
           var pdfFiles = app.doShellScript(
-            "lsof " + pidArgs + " 2>/dev/null | awk '$NF~/\\.pdf$/i {print $NF}' | sort -u"
+            "lsof " + pidArgs + " 2>/dev/null | awk '{print $NF}' | grep -i '\\.pdf$' | sort -u"
           ).trim();
           if (pdfFiles) {
-            pdfFiles.split("\n").forEach(function(filePath) {
+            pdfFiles.split("\r").forEach(function(filePath) {
               filePath = filePath.trim();
-              if (!filePath) return;
+              if (!filePath || filePath.indexOf("/") !== 0) return; // skip relative paths
               var label = filePath.split("/").pop() || "PDF";
               result.apps.push({ name: "PDFgear", filePath: filePath, label: label });
             });
