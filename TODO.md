@@ -30,6 +30,7 @@
 ## Future features
 
 - [ ] Spotify Web API integration — OAuth login to browse + save specific playlists (not just current track); requires Spotify Developer app + token refresh flow
+- [ ] Per-app refresh in workflow edit view — "re-capture this app" button on individual rows so e.g. Spotify track can be updated without rebuilding the whole workflow
 
 ## Before public launch (needs external accounts)
 
