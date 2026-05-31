@@ -229,6 +229,8 @@ function validateWorkflow(w) {
         !isSafeString(app.folderPath, 512))      return false;
     if (app.labelFallback !== undefined &&
         !isSafeString(app.labelFallback, 256))   return false;
+    if (app.filePath !== undefined &&
+        !isSafeString(app.filePath, 512))        return false;
   }
   return true;
 }
@@ -257,9 +259,11 @@ function runWorkflowById(workflowId) {
     const url = appTarget.folderPath
       ? appTarget.folderPath
       : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
+    const args = ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url];
+    if (appTarget.filePath && isSafeString(appTarget.filePath, 512)) args.push(appTarget.filePath);
     execFile(
       'osascript',
-      ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url],
+      args,
       { maxBuffer: 1024 * 1024 * 10 },
       () => {}
     );
@@ -337,6 +341,7 @@ ipcMain.handle('save-workflow', (_, workflow) => {
         ...(a.spotifyUri ? { spotifyUri: String(a.spotifyUri).slice(0, 256) } : {}),
         ...(a.folderPath ? { folderPath: String(a.folderPath).slice(0, 512) } : {}),
         ...(a.labelFallback ? { labelFallback: String(a.labelFallback).slice(0, 256) } : {}),
+        ...(a.filePath ? { filePath: String(a.filePath).slice(0, 512) } : {}),
       })),
       // preserve existing hotkey — save-workflow doesn't touch it
       ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),

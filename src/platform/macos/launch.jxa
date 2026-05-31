@@ -47,7 +47,14 @@ function run(argv) {
     var sysApp = Application.currentApplication();
     sysApp.includeStandardAdditions = true;
     var safe = urlArg.replace(/'/g, "'\\''");
-    sysApp.doShellScript("open -a 'Visual Studio Code' '" + safe + "'");
+    // argv[2] is filePath when present — open it; VS Code opens the file in its workspace
+    var fileArg = argv[2] || null;
+    if (fileArg && !fileArg.match(/^https?:\/\//i)) {
+      var safeFile = fileArg.replace(/'/g, "'\\''");
+      sysApp.doShellScript("open -a 'Visual Studio Code' '" + safeFile + "'");
+    } else {
+      sysApp.doShellScript("open -a 'Visual Studio Code' '" + safe + "'");
+    }
     return "Processed Code";
   }
 

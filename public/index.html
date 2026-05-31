@@ -1213,7 +1213,9 @@
         const urlSpan = document.createElement('span');
         urlSpan.className = 'preview-url';
         if (a.name === 'Code' && a.folderPath) {
-          if (a.folderPath.includes('/')) {
+          if (a.filePath) {
+            urlSpan.textContent = '📄 ' + a.filePath.split('/').pop();
+          } else if (a.folderPath.includes('/')) {
             urlSpan.textContent = '📁 ' + a.folderPath.split('/').pop();
           } else {
             const tp = a.folderPath.split(/[—•\-]/);

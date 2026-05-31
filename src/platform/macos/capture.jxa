@@ -118,13 +118,17 @@ function run() {
           var wins = se.processes["Code"].windows();
           var storagePath = app.pathTo("home folder") +
             "/Library/Application Support/Code/User/globalStorage/storage.json";
-          var recents = [];
+          var recentFolders = [], recentFiles = [];
           try {
             var parsed = JSON.parse(String(app.read(storagePath)));
             var workspaces = (parsed.openedPathsList && parsed.openedPathsList.workspaces3) || [];
             workspaces.forEach(function(e) {
-              var p = typeof e === "string" ? e : (e.folderUri || e.fileUri || "");
-              if (p) recents.push(decodeURIComponent(p.replace(/^file:\/\//, "")));
+              if (typeof e === "string") {
+                recentFolders.push(decodeURIComponent(e.replace(/^file:\/\//, "")));
+              } else {
+                if (e.folderUri) recentFolders.push(decodeURIComponent(e.folderUri.replace(/^file:\/\//, "")));
+                if (e.fileUri)   recentFiles.push(decodeURIComponent(e.fileUri.replace(/^file:\/\//, "")));
+              }
             });
           } catch(e) {}
 
@@ -132,18 +136,33 @@ function run() {
             try {
               var title = win.name();
               if (!title) return;
-              var parts = title.split(/[—•\-]/);
-              var matchedPath = null;
+              var parts = title.split(/\s[—•]\s/);
+              // parts[0] = filename (if file open), last meaningful = folder name
+              var fileLabel   = parts[0] ? parts[0].trim().replace(/\s*●$/, "") : ""; // strip dirty dot
+              var matchedFile = null, matchedFolder = null;
+
+              // Try to match the file label against recent files
+              if (fileLabel && fileLabel !== "Visual Studio Code") {
+                for (var r = 0; r < recentFiles.length; r++) {
+                  if (recentFiles[r].split("/").pop() === fileLabel) { matchedFile = recentFiles[r]; break; }
+                }
+              }
+
+              // Match folder from parts (search right to left, skip VS Code label)
+              var allRecents = recentFolders.concat(recentFiles);
               for (var i = parts.length - 1; i >= 0; i--) {
                 var label = parts[i].trim()
                   .replace(/\[SSH:.*?\]|\[Dev Containers.*?\]|\[WSL.*?\]/g, "").trim();
                 if (!label || label === "Visual Studio Code") continue;
-                for (var r = 0; r < recents.length; r++) {
-                  if (recents[r].split("/").pop() === label) { matchedPath = recents[r]; break; }
+                for (var r = 0; r < allRecents.length; r++) {
+                  if (allRecents[r].split("/").pop() === label) { matchedFolder = allRecents[r]; break; }
                 }
-                if (matchedPath) break;
+                if (matchedFolder) break;
               }
-              result.apps.push({ name: "Code", folderPath: matchedPath || title });
+
+              var entry = { name: "Code", folderPath: matchedFolder || title };
+              if (matchedFile) entry.filePath = matchedFile;
+              result.apps.push(entry);
             } catch(e) {}
           });
         } catch(e) {
