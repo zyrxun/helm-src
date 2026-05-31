@@ -26,8 +26,9 @@ function run() {
                 var ttyName = tab.tty();
                 if (!ttyName) return;
                 var cleanTty = ttyName.replace("/dev/", "");
+                // Find the deepest interactive shell on this TTY (pgid==pid, shell command)
                 var shellPid = app.doShellScript(
-                  "ps -o ppid= -t " + cleanTty + " | head -n 1 | awk '{print $1}'"
+                  "ps -t " + cleanTty + " -o pid=,pgid=,comm= 2>/dev/null | awk '$1==$2 && ($3~/bash|zsh|fish|^sh$/) {last=$1} END {print last}'"
                 ).trim();
                 if (shellPid) {
                   var cwd = app.doShellScript(
@@ -51,28 +52,31 @@ function run() {
           var notionWins = se.processes["Notion"].windows();
           var pushed = false;
           notionWins.forEach(function(win) {
+            // Get title first — works even when attributes are sandboxed
+            var title = null;
+            try { title = win.name(); } catch(e) {}
+
+            // Try accessibility URL attributes
+            var urlPayload = null;
             try {
-              var urlPayload = null;
               if (win.attributes.whose({ name: "AXDocument" }).length > 0)
                 urlPayload = win.attributes["AXDocument"].value();
               if (!urlPayload && win.attributes.whose({ name: "AXURL" }).length > 0)
                 urlPayload = win.attributes["AXURL"].value();
-              if (urlPayload && String(urlPayload).indexOf("notion.so") !== -1) {
-                var deepLink = String(urlPayload).replace(/^https?:\/\/www\.notion\.so/, "notion://www.notion.so");
-                result.apps.push({ name: "Notion", urlToOpen: deepLink });
-                pushed = true;
-              } else {
-                var title = win.name();
-                if (title && title !== "Notion") {
-                  result.apps.push({
-                    name: "Notion",
-                    urlToOpen: "notion://www.notion.so/",
-                    labelFallback: title.replace(" - Notion", "").trim()
-                  });
-                  pushed = true;
-                }
-              }
             } catch(e) {}
+
+            if (urlPayload && String(urlPayload).indexOf("notion.so") !== -1) {
+              var deepLink = String(urlPayload).replace(/^https?:\/\/www\.notion\.so/, "notion://www.notion.so");
+              result.apps.push({ name: "Notion", urlToOpen: deepLink });
+              pushed = true;
+            } else if (title && title !== "Notion") {
+              result.apps.push({
+                name: "Notion",
+                urlToOpen: "notion://www.notion.so/",
+                labelFallback: title.replace(" - Notion", "").trim()
+              });
+              pushed = true;
+            }
           });
           if (!pushed) result.apps.push({ name: "Notion" });
         }
