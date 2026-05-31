@@ -113,62 +113,35 @@ function run() {
     }
 
     if (name === "Code") {
-      if (se.processes.whose({ name: "Code" }).length > 0) {
-        try {
-          var wins = se.processes["Code"].windows();
-          var storagePath = app.pathTo("home folder") +
-            "/Library/Application Support/Code/User/globalStorage/storage.json";
-          var recentFolders = [], recentFiles = [];
-          try {
-            var parsed = JSON.parse(String(app.read(storagePath)));
-            var workspaces = (parsed.openedPathsList && parsed.openedPathsList.workspaces3) || [];
-            workspaces.forEach(function(e) {
-              if (typeof e === "string") {
-                recentFolders.push(decodeURIComponent(e.replace(/^file:\/\//, "")));
-              } else {
-                if (e.folderUri) recentFolders.push(decodeURIComponent(e.folderUri.replace(/^file:\/\//, "")));
-                if (e.fileUri)   recentFiles.push(decodeURIComponent(e.fileUri.replace(/^file:\/\//, "")));
-              }
-            });
-          } catch(e) {}
+      try {
+        var codePath = app.pathTo("home folder") +
+          "/Library/Application Support/Code/User/globalStorage/storage.json";
+        var codeParsed = JSON.parse(String(app.read(codePath)));
+        var codePushed = false;
 
-          wins.forEach(function(win) {
-            try {
-              var title = win.name();
-              if (!title) return;
-              var parts = title.split(/\s[—•]\s/);
-              // parts[0] = filename (if file open), last meaningful = folder name
-              var fileLabel   = parts[0] ? parts[0].trim().replace(/\s*●$/, "") : ""; // strip dirty dot
-              var matchedFile = null, matchedFolder = null;
+        // VS Code 1.90+: open folders live in backupWorkspaces.folders
+        var bwFolders = (codeParsed.backupWorkspaces && codeParsed.backupWorkspaces.folders) || [];
+        bwFolders.forEach(function(e) {
+          if (e.folderUri) {
+            result.apps.push({ name: "Code", folderPath: decodeURIComponent(e.folderUri.replace(/^file:\/\//, "")) });
+            codePushed = true;
+          }
+        });
 
-              // Try to match the file label against recent files
-              if (fileLabel && fileLabel !== "Visual Studio Code") {
-                for (var r = 0; r < recentFiles.length; r++) {
-                  if (recentFiles[r].split("/").pop() === fileLabel) { matchedFile = recentFiles[r]; break; }
-                }
-              }
-
-              // Match folder from parts (search right to left, skip VS Code label)
-              var allRecents = recentFolders.concat(recentFiles);
-              for (var i = parts.length - 1; i >= 0; i--) {
-                var label = parts[i].trim()
-                  .replace(/\[SSH:.*?\]|\[Dev Containers.*?\]|\[WSL.*?\]/g, "").trim();
-                if (!label || label === "Visual Studio Code") continue;
-                for (var r = 0; r < allRecents.length; r++) {
-                  if (allRecents[r].split("/").pop() === label) { matchedFolder = allRecents[r]; break; }
-                }
-                if (matchedFolder) break;
-              }
-
-              var entry = { name: "Code", folderPath: matchedFolder || title };
-              if (matchedFile) entry.filePath = matchedFile;
-              result.apps.push(entry);
-            } catch(e) {}
+        // Older VS Code: openedPathsList.workspaces3
+        if (!codePushed) {
+          var codeWs = (codeParsed.openedPathsList && codeParsed.openedPathsList.workspaces3) || [];
+          codeWs.forEach(function(e) {
+            var p = typeof e === "string" ? e : (e.folderUri || e.fileUri || "");
+            if (p) {
+              result.apps.push({ name: "Code", folderPath: decodeURIComponent(p.replace(/^file:\/\//, "")) });
+              codePushed = true;
+            }
           });
-        } catch(e) {
-          result.apps.push({ name: "Code" });
         }
-      } else {
+
+        if (!codePushed) result.apps.push({ name: "Code" });
+      } catch(e) {
         result.apps.push({ name: "Code" });
       }
       return; // skip generic push — prevents duplicate "Code" entry
