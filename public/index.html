@@ -1222,8 +1222,36 @@
           }
         } else if (a.name === 'Terminal' && a.folderPath) {
           urlSpan.textContent = '📂 ' + (a.folderPath.split('/').pop() || a.folderPath);
-        } else if (a.name === 'Notion' && a.urlToOpen) {
-          urlSpan.textContent = a.labelFallback ? '📄 ' + a.labelFallback : '📄 Notion page';
+        } else if (a.name === 'Notion') {
+          if (a.urlToOpen) {
+            urlSpan.textContent = a.labelFallback ? '📄 ' + a.labelFallback : '📄 Notion page';
+          } else {
+            const targetApp = a;
+            const inp = document.createElement('input');
+            inp.type = 'text';
+            inp.placeholder = 'Paste notion:// link';
+            inp.className = 'helm-input notion-url-input';
+            inp.style.cssText = 'font-size:11px;padding:2px 6px;height:20px;width:140px;margin-top:0;box-sizing:border-box;';
+            const block = e => e.stopPropagation();
+            inp.addEventListener('click', block);
+            inp.addEventListener('mousedown', block);
+            inp.addEventListener('keydown', block);
+            inp.addEventListener('input', () => {
+              const val = inp.value.trim();
+              const isNotion = /^notion:\/\//i.test(val) || /^https?:\/\/(?:[a-z0-9-]+\.)?notion\.so\//i.test(val);
+              if (isNotion) {
+                targetApp.urlToOpen = /^https?:\/\//i.test(val)
+                  ? val.replace(/^https?:\/\/(?:[a-z0-9-]+\.)?notion\.so/, 'notion://www.notion.so')
+                  : val;
+                inp.style.borderColor = 'var(--helm-green)';
+              } else {
+                delete targetApp.urlToOpen;
+                inp.style.borderColor = '';
+              }
+            });
+            urlSpan.textContent = '';
+            urlSpan.appendChild(inp);
+          }
         } else {
           urlSpan.textContent = a.label ? a.label : (a.urlToOpen ? truncateUrl(a.urlToOpen) : '');
         }
