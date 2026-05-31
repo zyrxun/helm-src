@@ -43,6 +43,50 @@ function run(argv) {
     return "Processed Figma";
   }
 
+  if (appName === "PDFgear") {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var potentialUrlArg = argv[1] || "";
+    var fileArg = argv[2] || null;
+    if (!fileArg && potentialUrlArg && potentialUrlArg.indexOf("/") === 0) {
+      fileArg = potentialUrlArg;
+    }
+    if (fileArg && typeof fileArg === "string" && !fileArg.match(/^https?:\/\//i)) {
+      var safe = fileArg.replace(/'/g, "'\\''");
+      sysApp.doShellScript("open -a 'PDFgear' '" + safe + "'");
+    } else {
+      sysApp.doShellScript("open -a 'PDFgear'");
+    }
+    return "Processed PDFgear";
+  }
+
+  if (appName === "Preview") {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    var potentialUrlArg = argv[1] || "";
+    var fileArg = argv[2] || null;
+    if (!fileArg && potentialUrlArg && potentialUrlArg.indexOf("/") === 0) {
+      fileArg = potentialUrlArg;
+    }
+    if (fileArg && typeof fileArg === "string" && !fileArg.match(/^https?:\/\//i)) {
+      var safe = fileArg.replace(/'/g, "'\\''");
+      try {
+        sysApp.doShellScript("open -a 'Preview' '" + safe + "'");
+      } catch(e) {
+        try {
+          var previewApp = Application("Preview");
+          previewApp.open(fileArg);
+          previewApp.activate();
+        } catch(e2) {
+          sysApp.doShellScript("open -a 'Preview' '" + safe + "'");
+        }
+      }
+    } else {
+      sysApp.doShellScript("open -a 'Preview'");
+    }
+    return "Processed Preview";
+  }
+
   if (appName === "Code") {
     var sysApp = Application.currentApplication();
     sysApp.includeStandardAdditions = true;

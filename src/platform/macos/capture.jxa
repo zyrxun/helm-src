@@ -102,6 +102,74 @@ function run() {
       return;
     }
 
+    if (name === "PDFgear") {
+      try {
+        var pdfgearPids = app.doShellScript(
+          "pgrep -x PDFgear 2>/dev/null || true"
+        ).trim();
+        if (pdfgearPids) {
+          var pidArgs = pdfgearPids.split(/\s+/).map(function(p) { return "-p " + p; }).join(" ");
+          var pdfFiles = app.doShellScript(
+            "lsof " + pidArgs + " 2>/dev/null | awk '$NF~/\\.pdf$/i {print $NF}' | sort -u"
+          ).trim();
+          if (pdfFiles) {
+            pdfFiles.split("\n").forEach(function(filePath) {
+              filePath = filePath.trim();
+              if (!filePath) return;
+              var label = filePath.split("/").pop() || "PDF";
+              result.apps.push({ name: "PDFgear", filePath: filePath, label: label });
+            });
+          } else {
+            result.apps.push({ name: "PDFgear" });
+          }
+        }
+      } catch(e) {
+        result.apps.push({ name: "PDFgear" });
+      }
+      return;
+    }
+
+    if (name === "Preview") {
+      try {
+        var preview = Application("Preview");
+        if (preview.running()) {
+          var pushed = false;
+          var docsArray = [];
+          try {
+            docsArray = Array.prototype.slice.call(preview.documents());
+          } catch(e) {
+            var totalDocs = 0;
+            try { totalDocs = preview.documents().length; } catch(err) {}
+            for (var d = 0; d < totalDocs; d++) {
+              try { docsArray.push(preview.documents[d]); } catch(err) {}
+            }
+          }
+          docsArray.forEach(function(doc) {
+            try {
+              if (!doc) return;
+              var rawRef = doc.file();
+              if (rawRef === null || typeof rawRef === "undefined") return;
+              var posixPath = null;
+              if (typeof rawRef.posixPath === "function") {
+                posixPath = rawRef.posixPath();
+              } else if (doc.path) {
+                try { posixPath = doc.path(); } catch(e) {}
+              }
+              if (!posixPath || String(posixPath).indexOf("[object") !== -1) return;
+              var label = "PDF";
+              try { label = String(doc.name() || "PDF"); } catch(e) {}
+              result.apps.push({ name: "Preview", filePath: String(posixPath).trim(), label: label });
+              pushed = true;
+            } catch(e) {}
+          });
+          if (!pushed) result.apps.push({ name: "Preview" });
+        }
+      } catch(e) {
+        result.apps.push({ name: "Preview" });
+      }
+      return;
+    }
+
     if (name === "Slack") {
       result.apps.push({ name: "Slack" });
       return;
