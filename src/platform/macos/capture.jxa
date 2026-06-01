@@ -171,7 +171,54 @@ function run() {
     }
 
     if (name === "Slack") {
+      // Deep link is enriched by main.js via slack_state.py after capture returns
       result.apps.push({ name: "Slack" });
+      return;
+    }
+
+    if (name === "Obsidian") {
+      try {
+        var obsJson = app.doShellScript(
+          "cat ~/Library/Application\\ Support/obsidian/obsidian.json 2>/dev/null || echo '{}'"
+        ).trim();
+        var obsData = JSON.parse(obsJson);
+        var obsVaults = obsData.vaults || {};
+        var openVault = null;
+        Object.keys(obsVaults).forEach(function(vid) {
+          if (obsVaults[vid].open) openVault = obsVaults[vid];
+        });
+        var vaultName = openVault ? openVault.path.split("/").pop() : null;
+
+        var noteLabel = null;
+        try {
+          var obsProc = se.processes.whose({ name: "Obsidian" })[0];
+          var obsWins = obsProc.windows();
+          if (obsWins.length > 0) {
+            var obsTitle = String(obsWins[0].name() || "");
+            // Title format: "Note Name - Vault Name - Obsidian" or "Note Name - Obsidian"
+            var obsParts = obsTitle.split(" - ");
+            if (obsParts.length >= 2 && obsParts[obsParts.length - 1].trim() === "Obsidian") {
+              noteLabel = obsParts[0].trim();
+              if (!vaultName && obsParts.length >= 3) vaultName = obsParts[1].trim();
+            }
+          }
+        } catch(e) {}
+
+        var obsUrl = null;
+        if (vaultName && noteLabel) {
+          obsUrl = "obsidian://open?vault=" + encodeURIComponent(vaultName) + "&file=" + encodeURIComponent(noteLabel);
+        } else if (vaultName) {
+          obsUrl = "obsidian://open?vault=" + encodeURIComponent(vaultName);
+        }
+
+        result.apps.push({
+          name: "Obsidian",
+          urlToOpen: obsUrl || undefined,
+          label: noteLabel || vaultName || undefined
+        });
+      } catch(e) {
+        result.apps.push({ name: "Obsidian" });
+      }
       return;
     }
 
@@ -181,38 +228,9 @@ function run() {
     }
 
     if (name === "Code") {
-      try {
-        var codePath = app.pathTo("home folder") +
-          "/Library/Application Support/Code/User/globalStorage/storage.json";
-        var codeParsed = JSON.parse(String(app.read(codePath)));
-        var codePushed = false;
-
-        // VS Code 1.90+: open folders live in backupWorkspaces.folders
-        var bwFolders = (codeParsed.backupWorkspaces && codeParsed.backupWorkspaces.folders) || [];
-        bwFolders.forEach(function(e) {
-          if (e.folderUri) {
-            result.apps.push({ name: "Code", folderPath: decodeURIComponent(e.folderUri.replace(/^file:\/\//, "")) });
-            codePushed = true;
-          }
-        });
-
-        // Older VS Code: openedPathsList.workspaces3
-        if (!codePushed) {
-          var codeWs = (codeParsed.openedPathsList && codeParsed.openedPathsList.workspaces3) || [];
-          codeWs.forEach(function(e) {
-            var p = typeof e === "string" ? e : (e.folderUri || e.fileUri || "");
-            if (p) {
-              result.apps.push({ name: "Code", folderPath: decodeURIComponent(p.replace(/^file:\/\//, "")) });
-              codePushed = true;
-            }
-          });
-        }
-
-        if (!codePushed) result.apps.push({ name: "Code" });
-      } catch(e) {
-        result.apps.push({ name: "Code" });
-      }
-      return; // skip generic push — prevents duplicate "Code" entry
+      // Open files are enriched by main.js via vscode_state.py after capture returns
+      result.apps.push({ name: "Code" });
+      return;
     }
 
     if (browserNames.indexOf(name) !== -1) {

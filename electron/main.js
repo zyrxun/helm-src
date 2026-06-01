@@ -25,6 +25,57 @@ const license = require('./license');
 
 const FREE_LIMIT = 2;
 
+// ── VS Code open-file resolver ────────────────────────────────────────────────
+// Reads each open workspace's state.vscdb to get actual editor tabs, not just folder paths.
+function enrichCodeApps(apps) {
+  const hasCode = apps.some(a => a.name === 'Code');
+  if (!hasCode) return Promise.resolve(apps);
+
+  return new Promise(resolve => {
+    const scriptPath = jxaPath('vscode_state.py');
+    execFile('python3', [scriptPath], { timeout: 4000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(apps);
+      try {
+        const files = JSON.parse(stdout.trim());
+        if (!Array.isArray(files) || files.length === 0) return resolve(apps);
+        // Replace the single Code stub with one entry per open file
+        const withoutCode = apps.filter(a => a.name !== 'Code');
+        const codeEntries = files.map(f => ({ name: 'Code', filePath: f.filePath, label: f.label }));
+        resolve([...withoutCode, ...codeEntries]);
+      } catch(e) {
+        resolve(apps);
+      }
+    });
+  });
+}
+
+// ── Slack deep-link resolver ──────────────────────────────────────────────────
+// Reads Slack's LevelDB local storage via slack_state.py — no API token needed.
+// Works across all workspaces the user is signed into.
+function enrichSlackApps(apps) {
+  const hasSlack = apps.some(a => a.name === 'Slack');
+  if (!hasSlack) return Promise.resolve(apps);
+
+  return new Promise(resolve => {
+    const scriptPath = jxaPath('slack_state.py');
+    execFile('python3', [scriptPath], { timeout: 3000 }, (err, stdout) => {
+      if (err || !stdout) return resolve(apps);
+      try {
+        const { t: teamId, c: channelId, n: teamName } = JSON.parse(stdout.trim());
+        const url = (teamId && channelId)
+          ? `slack://channel?team=${teamId}&id=${channelId}`
+          : null;
+        resolve(apps.map(a => {
+          if (a.name !== 'Slack') return a;
+          return { ...a, urlToOpen: url || undefined, label: teamName || 'Slack' };
+        }));
+      } catch(e) {
+        resolve(apps);
+      }
+    });
+  });
+}
+
 let tray      = null;
 let win       = null;
 let isPro     = false;
@@ -201,7 +252,7 @@ app.whenReady().then(async () => {
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const SAFE_STRING = /^[^\x00-\x1f\x7f"\\`$!|;&<>(){}[\]]*$/; // no shell metacharacters
-const SAFE_URL    = /^(https?|notion|slack|figma):\/\//i;
+const SAFE_URL    = /^(https?|notion|slack|figma|obsidian):\/\//i;
 
 function isSafeString(s, maxLen = 256) {
   return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_STRING.test(s);
@@ -301,15 +352,19 @@ ipcMain.handle('capture-state', () => {
         }
         try {
           const data = JSON.parse(stdout.trim());
-          // Strip any URLs that aren't http/https — Spotify track IDs, chrome://, etc.
-          const apps = (data.apps || []).map(a => {
+          // Strip any URLs that aren't safe schemes — Spotify track IDs, chrome://, etc.
+          let apps = (data.apps || []).map(a => {
             if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
               const { urlToOpen, ...rest } = a;
               return rest;
             }
             return a;
           });
-          resolve({ ok: true, apps });
+          // Enrich Slack (channel deep link) and Code (open files) via local app state
+          enrichSlackApps(apps)
+            .then(enrichCodeApps)
+            .then(enriched => resolve({ ok: true, apps: enriched }))
+            .catch(() => resolve({ ok: true, apps }));
         } catch (e) {
           resolve({ ok: false, error: 'Failed to parse capture output' });
         }

@@ -35,6 +35,18 @@ function run(argv) {
     return "Processed Slack";
   }
 
+  if (appName === "Obsidian") {
+    var sysApp = Application.currentApplication();
+    sysApp.includeStandardAdditions = true;
+    if (urlArg && urlArg.indexOf("obsidian://") === 0) {
+      var safe = urlArg.replace(/'/g, "'\\''");
+      sysApp.doShellScript("open '" + safe + "'");
+    } else {
+      sysApp.doShellScript("open -a 'Obsidian'");
+    }
+    return "Processed Obsidian";
+  }
+
   if (appName === "Figma" && urlArg) {
     var sysApp = Application.currentApplication();
     sysApp.includeStandardAdditions = true;
