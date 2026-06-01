@@ -1,40 +1,26 @@
 #!/usr/bin/env python3
 """
 Reads VS Code's per-workspace SQLite state to extract currently open editor tabs.
+Uses lsof to find only workspaces VS Code actually has open right now (not stale backups).
 Outputs JSON array: [{"filePath": "/abs/path/file.py", "label": "file.py"}, ...]
 """
-import os, json, sqlite3, sys
+import os, json, sqlite3, sys, subprocess, re
 
 home = os.path.expanduser("~")
-storage_json = os.path.join(home, "Library/Application Support/Code/User/globalStorage/storage.json")
 ws_root = os.path.join(home, "Library/Application Support/Code/User/workspaceStorage")
 
+# Use lsof to find workspace hashes VS Code currently has open
+# This avoids stale backupWorkspaces entries from previously closed windows
 try:
-    with open(storage_json) as f:
-        global_state = json.load(f)
-except Exception as e:
-    print(json.dumps({"error": str(e)})); sys.exit(1)
-
-bw = global_state.get("backupWorkspaces", {})
-open_folders = [e["folderUri"] for e in bw.get("folders", []) if "folderUri" in e]
-
-# Build folder URI → workspace hash map
-uri_to_hash = {}
-try:
-    for entry in os.listdir(ws_root):
-        ws_json = os.path.join(ws_root, entry, "workspace.json")
-        if not os.path.exists(ws_json):
-            continue
-        try:
-            with open(ws_json) as f:
-                d = json.load(f)
-            uri = d.get("folder") or d.get("workspace")
-            if uri:
-                uri_to_hash[uri] = entry
-        except Exception:
-            pass
+    lsof_out = subprocess.run(
+        ["lsof", "-c", "Code", "-F", "n"],
+        capture_output=True, text=True, timeout=4
+    ).stdout
+    open_hashes = set(re.findall(
+        r'workspaceStorage/([a-f0-9]{32})/state\.vscdb\b', lsof_out
+    ))
 except Exception:
-    pass
+    open_hashes = set()
 
 def extract_files_from_node(node):
     """Walk the serializedGrid tree and collect open file paths in MRU order."""
@@ -63,11 +49,7 @@ def extract_files_from_node(node):
 results = []
 seen = set()
 
-for folder_uri in open_folders:
-    hash_dir = uri_to_hash.get(folder_uri)
-    if not hash_dir:
-        continue
-
+for hash_dir in open_hashes:
     db_path = os.path.join(ws_root, hash_dir, "state.vscdb")
     if not os.path.exists(db_path):
         continue
