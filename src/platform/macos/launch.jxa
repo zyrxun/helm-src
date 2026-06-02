@@ -119,7 +119,32 @@ function run(argv) {
   app.includeStandardAdditions = true;
 
   var wasRunning = app.running(); // capture BEFORE activate changes state
-  app.activate();
+  if (!wasRunning) {
+    app.activate();
+  } else {
+    try {
+      app.activate();
+      delay(0.1);
+      app.reopen();
+    } catch(e) {}
+
+    var se = Application('System Events');
+    try {
+      var proc = se.processes.byName(appName);
+      proc.frontmost = true;
+      var wins = proc.windows();
+      for (var i = 0; i < wins.length; i++) {
+        try {
+          if (wins[i].attributes.byName('AXMinimized').value() === true) {
+            wins[i].attributes.byName('AXMinimized').value = false;
+          }
+        } catch(e) {}
+      }
+      if (wins.length > 0) {
+        try { wins[0].actions.byName('AXRaise').perform(); } catch(e) {}
+      }
+    } catch(e) {}
+  }
 
   if (appName === "Spotify" && urlArg && urlArg.indexOf("spotify:") === 0) {
     if (!wasRunning) delay(2);

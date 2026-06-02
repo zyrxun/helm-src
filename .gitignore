@@ -1,6 +1,5 @@
 node_modules/
 dist/
-.env
 *.key
 public/brand/icon.icns
 public/brand/dmg-background.png
@@ -8,3 +7,11 @@ public/brand/dmg-background.png
 .DS_Store
 **/.DS_Store
 *.zip
+
+.projects/cache
+.projects/vault
+.projects/state.test.json
+.projects/state.local.test.json
+.env
+.env.*
+!.env.example

@@ -25,7 +25,13 @@
 
 - [x] Upload DMG to Google Drive / Dropbox and share download link with testers (iMessage/AirDrop for nearby testers)
 - [x] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
-- [ ] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
+- [x] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
+
+## Auto-update (Sparkle)
+
+- [ ] Wire `update-electron-app` with GitHub releases appcast (version check on launch, in-app banner)
+- [ ] Host appcast: tag releases as `v1.x.x`, attach signed DMG as artifact — Sparkle fetches from GitHub Releases automatically
+- [ ] Requires signed + notarized build — Apple Developer enrollment above must be done first
 
 ## Future features
 

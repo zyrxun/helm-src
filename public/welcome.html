@@ -164,12 +164,42 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom: 20px;">
+  <div class="card">
     <div class="arrow-wrap">🔐</div>
     <div class="card-text">
       <div class="card-title">Grant Accessibility access</div>
       <div class="card-body">
         Helm needs permission to open your apps. Go to <span>System Settings → Privacy & Security → Accessibility</span> and enable Helm.
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="arrow-wrap">⊠</div>
+    <div class="card-text">
+      <div class="card-title">Launch or Teardown</div>
+      <div class="card-body">
+        Switch between <span>Launch</span> and <span>Teardown</span> at the bottom of the popover.
+        In Teardown mode, your hotkeys and run buttons quit your stack instead of opening it —
+        same key, opposite direction.
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 20px;">
+    <div class="arrow-wrap">◐</div>
+    <div class="card-text">
+      <div class="card-title">Focus modes need a Shortcut</div>
+      <div class="card-body">
+        To attach a macOS Focus to a workflow, open the Shortcuts app and create two shortcuts named
+        <span>Enable [Mode]</span> and <span>Disable [Mode]</span> — for example
+        <span>Enable Deep Work</span> and <span>Disable Deep Work</span>. Each shortcut uses the
+        <span>Set Focus</span> action to turn the matching focus on or off. Helm runs them
+        automatically on launch and teardown.
+        <a href="#" onclick="window.api.openShortcutsApp(); return false;"
+           style="display:inline-block;margin-top:6px;color:var(--helm-gold);text-decoration:underline;cursor:pointer;">
+          Open Shortcuts app
+        </a>
       </div>
     </div>
   </div>

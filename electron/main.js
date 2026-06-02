@@ -232,6 +232,9 @@ app.whenReady().then(async () => {
 
   app.dock.hide();
   registerWorkflowShortcuts();
+  const saved = loadAppSettings();
+  if (saved.modeToggleHotkey) registerModeToggleHotkey(saved.modeToggleHotkey);
+  updateTrayModeIndicator();
 
   // Show welcome window on first ever launch
   const fs = require('fs');
@@ -243,7 +246,10 @@ app.whenReady().then(async () => {
       resizable: false, minimizable: false, maximizable: false,
       titleBarStyle: 'hiddenInset',
       backgroundColor: '#0A1628',
-      webPreferences: { contextIsolation: true },
+      webPreferences: {
+        contextIsolation: true,
+        preload: path.join(__dirname, 'preload.js'),
+      },
     });
     welcome.loadFile(path.join(__dirname, '../public/welcome.html'));
     welcome.show();
@@ -323,6 +329,85 @@ function validateHotkeyStr(hotkey) {
   return /^[A-Za-z0-9+]+$/.test(hotkey);
 }
 
+let isTeardownModeActive = false;
+let activeExecutionGuard = false;
+let modeToggleHotkey = null;
+
+function settingsPath() {
+  return path.join(app.getPath('userData'), 'Helm', 'settings.json');
+}
+function loadAppSettings() {
+  try {
+    const raw = require('fs').readFileSync(settingsPath(), 'utf8');
+    return JSON.parse(raw);
+  } catch (e) { return {}; }
+}
+function saveAppSettings(patch) {
+  const fs = require('fs');
+  const dir = path.dirname(settingsPath());
+  try { fs.mkdirSync(dir, { recursive: true }); } catch(e) {}
+  const cur = loadAppSettings();
+  fs.writeFileSync(settingsPath(), JSON.stringify({ ...cur, ...patch }, null, 2));
+}
+
+function updateTrayModeIndicator() {
+  if (!tray) return;
+  try { tray.setTitle(isTeardownModeActive ? ' ⊠' : ''); } catch(e) {}
+  try { tray.setToolTip(isTeardownModeActive ? 'Helm — Teardown mode' : 'Helm'); } catch(e) {}
+}
+
+function setTeardownMode(on, broadcast) {
+  isTeardownModeActive = !!on;
+  updateTrayModeIndicator();
+  if (broadcast && win && !win.webContents.isDestroyed()) {
+    win.webContents.send('mode-changed', isTeardownModeActive);
+  }
+}
+
+function registerModeToggleHotkey(accelerator) {
+  if (modeToggleHotkey) {
+    try { globalShortcut.unregister(modeToggleHotkey); } catch(e) {}
+  }
+  modeToggleHotkey = accelerator || null;
+  if (!accelerator) return true;
+  try {
+    return globalShortcut.register(accelerator, () => {
+      setTeardownMode(!isTeardownModeActive, true);
+    });
+  } catch(e) { return false; }
+}
+
+async function teardownWorkflowById(workflowId) {
+  if (!isSafeId(workflowId)) return { ok: false, error: 'Invalid workflow id' };
+  if (!hasAccessibility()) return { ok: false, error: 'accessibility_denied' };
+  const workflows = storage.load();
+  const workflow  = workflows.find(w => w.id === workflowId);
+  if (!workflow) return { ok: false, error: 'Workflow not found' };
+  const targets = (workflow.apps || [])
+    .filter(a => a && isSafeString(a.name, 128))
+    .map(a => ({ name: a.name.replace(/'/g, '') }));
+  await Promise.all(targets.map(a =>
+    new Promise(resolve =>
+      execFile('osascript', ['-l', 'JavaScript', jxaPath('close.jxa'), a.name],
+        { timeout: 5000 }, () => resolve()))
+  ));
+
+  if (workflow.focusMode && isSafeString(workflow.focusMode, 128)) {
+    execFile('osascript',
+      ['-l', 'JavaScript', jxaPath('focus.jxa'), workflow.focusMode, 'disable'],
+      { timeout: 3000 }, (err) => {
+        if (err && win) {
+          win.webContents.send('workflow-warning', {
+            type: 'FOCUS_DISABLE_SHORTCUT_MISSING',
+            mode: workflow.focusMode
+          });
+        }
+      });
+  }
+
+  return { ok: true };
+}
+
 async function runWorkflowById(workflowId) {
   if (!isSafeId(workflowId)) return { ok: false, error: 'Invalid workflow id' };
   if (!hasAccessibility()) return { ok: false, error: 'accessibility_denied' };
@@ -374,11 +459,28 @@ function registerWorkflowShortcuts() {
   storage.load().forEach(w => {
     if (!w.hotkey) return;
     try {
-      globalShortcut.register(w.hotkey, () => runWorkflowById(w.id));
+      globalShortcut.register(w.hotkey, async () => {
+        if (activeExecutionGuard) return;
+        activeExecutionGuard = true;
+        try {
+          isTeardownModeActive
+            ? await teardownWorkflowById(w.id)
+            : await runWorkflowById(w.id);
+        } finally {
+          activeExecutionGuard = false;
+        }
+      });
     } catch (e) {
       console.error('[shortcut] failed to register', w.hotkey, e.message);
     }
   });
+  if (modeToggleHotkey) {
+    try {
+      globalShortcut.register(modeToggleHotkey, () => {
+        setTeardownMode(!isTeardownModeActive, true);
+      });
+    } catch(e) {}
+  }
 }
 
 // ── IPC handlers ──────────────────────────────────────────────────────────────
@@ -387,6 +489,22 @@ ipcMain.handle('get-workflows',   () => storage.load());
 ipcMain.handle('get-focus-modes', () => getFocusModes());
 
 ipcMain.handle('run-workflow', (_, workflowId) => runWorkflowById(workflowId));
+
+ipcMain.handle('teardown-workflow', async (_, id) => {
+  if (activeExecutionGuard) return { ok: false, error: 'busy' };
+  activeExecutionGuard = true;
+  try { return await teardownWorkflowById(id); }
+  finally { activeExecutionGuard = false; }
+});
+ipcMain.handle('set-teardown-mode', (_, on) => { setTeardownMode(on, false); return isTeardownModeActive; });
+ipcMain.handle('get-teardown-mode', ()       => isTeardownModeActive);
+ipcMain.handle('get-mode-toggle-hotkey', () => modeToggleHotkey);
+ipcMain.handle('set-mode-toggle-hotkey', (_, accelerator) => {
+  if (accelerator !== null && !validateHotkeyStr(accelerator)) return { ok: false, error: 'invalid' };
+  const ok = registerModeToggleHotkey(accelerator);
+  if (ok) saveAppSettings({ modeToggleHotkey: accelerator });
+  return { ok };
+});
 
 ipcMain.handle('capture-state', () => {
   return new Promise(resolve => {
@@ -499,6 +617,11 @@ ipcMain.handle('validate-license', async (_, key) => {
   return { ok: result.valid, email: result.email, offline: result.offline || false, reason: result.reason };
 });
 
+ipcMain.handle('open-shortcuts-app', () => {
+  shell.openExternal('shortcuts://').catch(() => {
+    execFile('open', ['-a', 'Shortcuts'], () => {});
+  });
+});
 ipcMain.handle('open-external', (_, url) => {
   if (!isSafeUrl(url)) return;
   shell.openExternal(url);

@@ -80,9 +80,16 @@
     }
     .wheel-gold  { color: var(--helm-gold);  --hub-fill: var(--helm-abyss); }
     .wheel-green { color: var(--helm-green); --hub-fill: var(--helm-green-hub); }
+    .wheel-red   { color: var(--helm-alert); --hub-fill: #2a0d0c; }
+    body.teardown-active .run-btn.running {
+      background: var(--helm-alert);
+      border-color: var(--helm-alert);
+    }
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .wheel-slow { animation: spin var(--spin-slow) linear infinite; }
     .wheel-fast { animation: spin var(--spin-fast) linear infinite; }
+    @keyframes spin-reverse { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+    .wheel-fast-reverse { animation: spin-reverse var(--spin-fast) linear infinite; }
 
     /* ── Views ── */
     .view { display: none; flex-direction: column; height: 480px; }
@@ -261,6 +268,33 @@
     }
     .footer-btn.muted { color: var(--helm-fog); }
     .footer-btn.muted:hover { color: var(--helm-chalk); }
+
+    /* Mode control bar */
+    .mode-control-bar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 12px;
+      border-top: 0.5px solid rgba(247,244,239,0.08);
+      background: var(--helm-abyss);
+      flex-shrink: 0;
+    }
+    .mode-label {
+      font-family: var(--font-ui); font-size: 10px; font-weight: 500;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--helm-fog); opacity: 0.7;
+    }
+    .mode-toggle-group {
+      display: flex; background: var(--helm-navy); padding: 2px;
+      border-radius: 4px; border: 0.5px solid rgba(247,244,239,0.08);
+    }
+    .mode-btn {
+      font-family: var(--font-ui); font-size: 11px; color: var(--helm-fog);
+      background: transparent; border: none; padding: 3px 10px; cursor: pointer; border-radius: 2px;
+    }
+    .mode-btn.active { color: var(--helm-abyss); background: var(--helm-gold); font-weight: 600; }
+
+    /* Dual-icon run button state swap */
+    .icon-state-teardown { display: none; }
+    .teardown-active .icon-state-launch   { display: none !important; }
+    .teardown-active .icon-state-teardown { display: inline-flex !important; }
 
     /* Prominent gold pill for Add */
     .add-btn {
@@ -552,12 +586,81 @@
     .preview-item[data-mode="close-locked"] .item-check .check-icon { display: none; }
     .preview-item[data-mode="close-locked"] .item-check .close-icon { display: none; }
     .preview-item[data-mode="close-locked"] .item-check .lock-icon  { display: block; }
+    /* both state — gold border, gold checkmark */
+    .preview-item[data-mode="both"] .item-check {
+      background: transparent;
+      border: 1px solid var(--helm-gold);
+    }
+    .preview-item[data-mode="both"] .item-check .check-icon {
+      display: block !important;
+      stroke: var(--helm-gold);
+    }
+    .preview-item[data-mode="both"] .item-check .close-icon,
+    .preview-item[data-mode="both"] .item-check .lock-icon { display: none !important; }
     /* skip state — dim entire row */
     .preview-item[data-mode="skip"] { opacity: 0.25; }
     .preview-item[data-mode="skip"] .item-check { background: transparent; border-color: rgba(247,244,239,0.15); }
     .preview-item[data-mode="skip"] .item-check svg { display: none; }
     /* hide all icons by default */
     .item-check .check-icon, .item-check .close-icon, .item-check .lock-icon { display: none; }
+
+    /* Focus list item */
+    .focus-list-item {
+      background: var(--helm-navy);
+      border: 0.5px solid rgba(247,244,239,0.08);
+      border-radius: var(--r-card);
+      margin-bottom: 5px;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .focus-list-item:hover { border-color: rgba(212,175,106,0.4); }
+    .focus-list-item .focus-list-header {
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .focus-list-icon {
+      width: 16px; height: 16px;
+      border-radius: 4px;
+      border: 0.5px solid rgba(247,244,239,0.3);
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 9px; color: var(--helm-fog);
+    }
+    .focus-list-item.has-mode .focus-list-icon {
+      background: var(--helm-gold); border-color: var(--helm-gold); color: var(--helm-abyss);
+    }
+    .focus-list-label {
+      font-family: var(--font-ui); font-size: 12px; color: var(--helm-fog); flex: 1;
+    }
+    .focus-list-item.has-mode .focus-list-label { color: var(--helm-chalk); }
+    .focus-list-chevron {
+      font-size: 9px; color: var(--helm-fog); opacity: 0.5; transition: transform 0.15s;
+    }
+    .focus-list-item.expanded .focus-list-chevron { transform: rotate(180deg); }
+    .focus-options {
+      display: none;
+      flex-direction: column;
+      border-top: 0.5px solid rgba(247,244,239,0.06);
+    }
+    .focus-list-item.expanded .focus-options { display: flex; }
+    .focus-option {
+      padding: 7px 12px 7px 38px;
+      font-family: var(--font-ui); font-size: 11px; color: var(--helm-fog);
+      cursor: pointer;
+    }
+    .focus-option:hover { background: rgba(212,175,106,0.08); color: var(--helm-chalk); }
+    .focus-option.active { color: var(--helm-gold); }
+    .field-explanatory-label {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--helm-fog);
+      opacity: 0.5;
+      display: block;
+      margin: 2px 0 8px 4px;
+    }
 
     /* Workflow card metadata line */
     .card-metadata {
@@ -571,32 +674,6 @@
       text-overflow: ellipsis;
       margin-top: 1px;
     }
-    /* Focus mode picker row */
-    .focus-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-top: 8px;
-    }
-    .focus-label {
-      font-family: var(--font-ui);
-      font-size: 11px;
-      color: var(--helm-fog);
-      flex-shrink: 0;
-    }
-    .focus-select {
-      flex: 1;
-      background: var(--helm-navy);
-      border: 0.5px solid rgba(200,196,188,0.2);
-      border-radius: 6px;
-      color: var(--helm-chalk);
-      font-family: var(--font-ui);
-      font-size: 11px;
-      padding: 4px 8px;
-      outline: none;
-      cursor: pointer;
-    }
-    .focus-select:focus { border-color: rgba(212,175,106,0.5); }
     /* Inline system alert bar */
     .system-alert-bar {
       font-family: var(--font-ui);
@@ -700,8 +777,16 @@
       background: var(--helm-abyss);
       border: 0.5px rgba(247,244,239,0.10) solid;
       border-radius: var(--r-window);
-      width: 280px; padding: 20px; display: flex; flex-direction: column; gap: 16px;
+      width: 280px; max-height: calc(100vh - 40px);
+      display: flex; flex-direction: column;
+      overflow: hidden;
     }
+    .settings-body {
+      display: flex; flex-direction: column; gap: 16px;
+      overflow-y: auto; padding: 0 20px 20px;
+    }
+    .settings-body::-webkit-scrollbar { width: 4px; }
+    .settings-body::-webkit-scrollbar-thumb { background: rgba(200,196,188,0.2); border-radius: 2px; }
     .settings-header { display: flex; justify-content: space-between; align-items: center; }
     .settings-title { font-family: var(--font-display); font-size: 16px; color: var(--helm-gold); }
     .settings-section { display: flex; flex-direction: column; gap: 10px; }
@@ -800,11 +885,12 @@
 <!-- ── Settings overlay ── -->
 <div id="settings-overlay">
   <div class="settings-panel">
-    <div class="settings-header">
+    <div class="settings-header" style="padding: 20px 20px 12px; flex-shrink: 0;">
       <span class="settings-title">Settings</span>
       <button class="icon-btn" onclick="closeSettings()">✕</button>
     </div>
 
+    <div class="settings-body">
     <section class="settings-section">
       <div class="settings-section-label">License</div>
       <div class="settings-row">
@@ -853,10 +939,34 @@
       <button id="s-accessibility-btn" class="deactivate-btn" style="display:none" onclick="requestAccessibility()">
         Grant Access in System Settings
       </button>
+      <div class="settings-row">
+        <span class="settings-key">Mode toggle hotkey</span>
+        <span id="s-mode-hotkey-pill" class="hotkey-pill has-hotkey" style="cursor:pointer" onclick="editModeHotkey()">—</span>
+      </div>
+    </section>
+
+    <div class="settings-divider"></div>
+
+    <section class="settings-section">
+      <div class="settings-section-label">Focus modes</div>
+      <div class="settings-row" style="align-items:flex-start">
+        <span class="settings-val" style="font-size:11px;line-height:1.4;color:var(--helm-fog)">
+          To activate a Focus mode from a workflow, create two macOS Shortcuts named exactly
+          <span style="color:var(--helm-chalk)">Enable [Mode]</span> and
+          <span style="color:var(--helm-chalk)">Disable [Mode]</span> in the Shortcuts app.
+          Helm runs <span style="color:var(--helm-chalk)">Enable [Mode]</span> on launch and
+          <span style="color:var(--helm-chalk)">Disable [Mode]</span> on teardown.
+          <a href="#" onclick="window.api.openShortcutsApp(); return false;"
+             style="display:inline-block;margin-top:4px;color:var(--helm-gold);text-decoration:underline;cursor:pointer;">
+            Open Shortcuts app
+          </a>
+        </span>
+      </div>
     </section>
 
     <button class="done-btn" onclick="closeSettings()">Done</button>
     <button class="feedback-link" onclick="closeSettings(); openFeedback()">Report a bug</button>
+    </div>
   </div>
 </div>
 
@@ -912,6 +1022,13 @@
   </div>
 
   <div id="workflow-alert-bar" style="display:none"></div>
+  <div class="mode-control-bar">
+    <span class="mode-label">Mode</span>
+    <div class="mode-toggle-group">
+      <button class="mode-btn active" id="mode-launch-btn"   onclick="setMode(false)">Launch</button>
+      <button class="mode-btn"        id="mode-teardown-btn" onclick="setMode(true)">Teardown</button>
+    </div>
+  </div>
   <footer class="helm-footer">
     <button class="footer-btn muted" onclick="showSettings()">Settings</button>
     <button class="add-btn" id="add-btn" onclick="startCapture()">
@@ -946,12 +1063,6 @@
   <div class="capture-form" id="capture-form" style="display:none">
     <div class="section-label">Name this workflow</div>
     <input class="helm-input" id="workflow-name" type="text" placeholder="e.g. Morning stack" maxlength="40"/>
-    <div class="focus-row" id="focus-row" style="display:none">
-      <span class="focus-label">Focus mode</span>
-      <select class="focus-select" id="focus-mode-select">
-        <option value="">None</option>
-      </select>
-    </div>
     <button class="primary-btn" id="btn-save" onclick="saveWorkflow()">Save workflow</button>
   </div>
 </div>
@@ -1026,6 +1137,39 @@
       .replace(/Left/g,    '←')
       .replace(/Right/g,   '→')
       .replace(/\+/g,      ' ');
+  }
+
+  async function editModeHotkey() {
+    const pill = document.getElementById('s-mode-hotkey-pill');
+    const originalText = pill.textContent;
+    pill.textContent = '…';
+    pill.classList.add('capturing');
+    const onKey = async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (['Meta','Control','Alt','Shift'].includes(e.key)) return;
+      document.removeEventListener('keydown', onKey, true);
+      pill.classList.remove('capturing');
+      if (e.key === 'Escape') {
+        await window.api.setModeToggleHotkey(null);
+        pill.textContent = '—';
+        return;
+      }
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        showToast('Include at least one modifier key (⌘, ⌃, ⌥, ⇧).');
+        pill.textContent = originalText;
+        return;
+      }
+      const accelerator = buildAccelerator(e);
+      const result = await window.api.setModeToggleHotkey(accelerator);
+      if (result && result.ok) {
+        pill.textContent = formatHotkey(accelerator);
+      } else {
+        showToast('Could not register shortcut — try a different combination.');
+        pill.textContent = originalText;
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
   }
 
   async function editHotkey(workflowId, currentHotkey) {
@@ -1112,10 +1256,10 @@
       const btn = document.createElement('div');
       btn.className = 'run-btn';
       btn.id = 'runbtn-' + w.id;
-      const triangle = document.createElement('div');
-      triangle.className = 'play-triangle';
-      btn.appendChild(triangle);
-      btn.addEventListener('click', () => runWorkflow(w.id));
+      btn.innerHTML = `
+        <span class="icon-state-launch"><div class="play-triangle"></div></span>
+        <span class="icon-state-teardown"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1" stroke="var(--helm-chalk)" stroke-width="1.2"/><path d="M4 4L8 8M8 4L4 8" stroke="var(--helm-chalk)" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+      btn.onclick = () => executeWorkflowAction(w.id);
 
       const info = document.createElement('div');
       info.className = 'row-info';
@@ -1168,6 +1312,45 @@
     updateAddButton();
   }
 
+  const DUAL_ICON_HTML = `
+    <span class="icon-state-launch"><div class="play-triangle"></div></span>
+    <span class="icon-state-teardown"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1.5" y="1.5" width="9" height="9" rx="1" stroke="var(--helm-chalk)" stroke-width="1.2"/><path d="M4 4L8 8M8 4L4 8" stroke="var(--helm-chalk)" stroke-width="1.2" stroke-linecap="round"/></svg></span>`;
+
+  function restoreRunBtn(btn) {
+    btn.innerHTML = DUAL_ICON_HTML;
+  }
+
+  async function executeWorkflowAction(id) {
+    const isTeardown = document.body.classList.contains('teardown-active');
+    if (isTeardown) {
+      const btn = document.getElementById('runbtn-' + id);
+      btn.innerHTML = '';
+      btn.classList.add('running');
+      btn.appendChild(makeWheel(18, 'wheel-green', 'wheel-fast-reverse'));
+      const minDisplay = new Promise(r => setTimeout(r, 4000));
+      const [result] = await Promise.all([window.api.teardownWorkflow(id), minDisplay]);
+      btn.classList.remove('running');
+      restoreRunBtn(btn);
+      btn.onclick = () => executeWorkflowAction(id);
+      if (result && result.ok) showToast('Stack cleared.');
+      else if (result && result.error === 'busy') showToast('Already running.');
+      else if (result && result.error === 'accessibility_denied') showToast('Accessibility access required. Open Settings → System to grant it.');
+    } else {
+      runWorkflow(id);
+    }
+  }
+
+  function setModeUI(on) {
+    document.getElementById('mode-launch-btn').classList.toggle('active', !on);
+    document.getElementById('mode-teardown-btn').classList.toggle('active', on);
+    document.body.classList.toggle('teardown-active', on);
+  }
+
+  async function setMode(on) {
+    await window.api.setTeardownMode(on);
+    setModeUI(on);
+  }
+
   async function runWorkflow(id) {
     const list   = document.getElementById('workflow-list');
     const row    = document.getElementById('row-' + id);
@@ -1190,8 +1373,8 @@
       list.classList.remove('is-launching');
       row.classList.remove('active-target');
       btn.classList.remove('running');
-      btn.innerHTML = '<div class="play-triangle"></div>';
-      btn.addEventListener('click', () => runWorkflow(id), { once: true });
+      restoreRunBtn(btn);
+      btn.onclick = () => executeWorkflowAction(id);
       setStatus('ready');
       showToast('Accessibility access required. Open Settings → System to grant it.');
       return;
@@ -1202,16 +1385,17 @@
       list.classList.remove('is-launching');
       row.classList.remove('active-target');
       btn.classList.remove('running');
-      btn.innerHTML = '<div class="play-triangle"></div>';
-      btn.addEventListener('click', () => runWorkflow(id), { once: true });
+      restoreRunBtn(btn);
+      btn.onclick = () => executeWorkflowAction(id);
       setStatus('ready');
       showToast('Your stack is ready.');
-    }, 2400);
+    }, 4000);
   }
 
   // ── Capture flow ──────────────────────────────────────────────────────────
 
   let capturedApps = [];
+  let currentFocusMode = null;
   let captureGen = 0; // incremented on each capture; stale results are discarded
 
   async function startCapture() {
@@ -1280,10 +1464,90 @@
     renderPreview();
   }
 
-  // appModes: Map<index, 'open'|'close'|'skip'> — replaces selectedSet
+  // appModes: Map<index, 'open'|'close'|'both'|'skip'> — replaces selectedSet
   let appModes = new Map();
 
-  function renderPreview(preserveSelection = false) {
+  function appendFocusListItem(listEl, modes) {
+    const item = document.createElement('div');
+    item.className = 'focus-list-item' + (currentFocusMode ? ' has-mode' : '');
+    item.id = 'focus-list-item';
+
+    const header = document.createElement('div');
+    header.className = 'focus-list-header';
+    header.innerHTML = `
+      <div class="focus-list-icon">⌁</div>
+      <span class="focus-list-label">${currentFocusMode ? 'Focus: ' + currentFocusMode : 'Focus mode'}</span>
+      <span class="focus-list-chevron">▾</span>`;
+
+    const opts = document.createElement('div');
+    opts.className = 'focus-options';
+
+    const noneOpt = document.createElement('div');
+    noneOpt.className = 'focus-option' + (!currentFocusMode ? ' active' : '');
+    noneOpt.textContent = 'None';
+    noneOpt.addEventListener('click', e => { e.stopPropagation(); setFocusMode(null, item, modes); });
+    opts.appendChild(noneOpt);
+
+    modes.forEach(m => {
+      const opt = document.createElement('div');
+      opt.className = 'focus-option' + (currentFocusMode === m ? ' active' : '');
+      opt.textContent = m;
+      opt.addEventListener('click', e => { e.stopPropagation(); setFocusMode(m, item, modes); });
+      opts.appendChild(opt);
+    });
+
+    header.addEventListener('click', e => {
+      e.stopPropagation();
+      item.classList.toggle('expanded');
+    });
+
+    item.appendChild(header);
+    item.appendChild(opts);
+    listEl.appendChild(item);
+
+    const hint = document.createElement('span');
+    hint.className = 'field-explanatory-label';
+    hint.textContent = "Requires shortcuts named 'Enable [Mode]' and 'Disable [Mode]'";
+    listEl.appendChild(hint);
+  }
+
+  function setFocusMode(mode, item, modes) {
+    currentFocusMode = mode;
+    item.classList.toggle('has-mode', !!mode);
+    item.classList.remove('expanded');
+    item.querySelector('.focus-list-label').textContent = mode ? 'Focus: ' + mode : 'Focus mode';
+    item.querySelectorAll('.focus-option').forEach((opt, i) => {
+      const val = i === 0 ? null : modes[i - 1];
+      opt.classList.toggle('active', val === mode);
+    });
+  }
+
+  function appItemKey(a) {
+    return [a.name, a.urlToOpen || '', a.folderPath || '', a.filePath || '', a.label || ''].join('|');
+  }
+
+  function buildDisplayOrder(splitBySelected) {
+    const counts = new Map();
+    capturedApps.forEach(a => counts.set(a.name, (counts.get(a.name) || 0) + 1));
+    const indices = capturedApps.map((_, i) => i);
+    const isSelected = i => (appModes.get(i) || 'open') !== 'skip';
+    indices.sort((a, b) => {
+      if (splitBySelected) {
+        const sa = isSelected(a) ? 0 : 1;
+        const sb = isSelected(b) ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+      }
+      const ca = counts.get(capturedApps[a].name);
+      const cb = counts.get(capturedApps[b].name);
+      if (ca !== cb) return ca - cb;
+      const na = capturedApps[a].name, nb = capturedApps[b].name;
+      if (na !== nb) return na < nb ? -1 : 1;
+      return a - b;
+    });
+    return indices;
+  }
+
+  function renderPreview(preserveSelection = false, splitBySelected = false) {
     const count = capturedApps.length;
     document.getElementById('capture-section-label').textContent =
       `${count} item${count !== 1 ? 's' : ''} detected`;
@@ -1298,7 +1562,9 @@
       document.getElementById('select-bar').style.display = 'none';
     } else {
       listEl.innerHTML = '';
-      capturedApps.forEach((a, i) => {
+      const displayOrder = buildDisplayOrder(splitBySelected);
+      displayOrder.forEach(i => {
+        const a = capturedApps[i];
         const row = document.createElement('div');
         const mode = appModes.get(i) || 'open';
         row.className = 'preview-item';
@@ -1424,20 +1690,26 @@
         listEl.appendChild(row);
       });
 
-      // Populate focus mode dropdown
+      // Append focus mode list item
       window.api.getFocusModes().then(modes => {
-        const sel = document.getElementById('focus-mode-select');
-        const current = sel.value;
-        sel.innerHTML = '<option value="">None</option>';
-        (modes || []).forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m;
-          opt.textContent = m;
-          if (m === current) opt.selected = true;
-          sel.appendChild(opt);
-        });
-        document.getElementById('focus-row').style.display = 'flex';
+        if (!modes || !modes.length) return;
+        appendFocusListItem(listEl, modes);
       }).catch(() => {});
+
+      // Cycle hint
+      const oldHint = listEl.parentElement.querySelector('.edit-matrix-hint');
+      if (oldHint) oldHint.remove();
+      const cycleHint = document.createElement('span');
+      cycleHint.className = 'field-explanatory-label edit-matrix-hint';
+      cycleHint.style.marginTop = '10px';
+      cycleHint.style.borderTop = '0.5px solid rgba(247,244,239,0.05)';
+      cycleHint.style.paddingTop = '8px';
+      cycleHint.innerHTML = 'Click to cycle: '
+        + '<span style="color:var(--helm-gold);font-weight:500">launch only</span> · '
+        + '<span style="color:var(--helm-fog);font-weight:500">teardown only</span> · '
+        + '<span style="color:var(--helm-chalk);font-weight:500">both</span> · skip';
+      const sectionContainer = listEl.closest('.edit-workflow-section') || listEl.parentElement;
+      sectionContainer.appendChild(cycleHint);
 
       document.getElementById('select-bar').style.display = 'flex';
       updateSelectBar();
@@ -1454,17 +1726,17 @@
 
   function toggleItem(i) {
     const current = appModes.get(i) || 'open';
-    let next;
+    let next = 'open';
     if (current === 'open') {
-      // Pro: cycle open → close → skip. Free: cycle open → skip.
       next = isPro ? 'close' : 'skip';
     } else if (current === 'close') {
+      next = isPro ? 'both' : 'skip';
+    } else if (current === 'both') {
       next = 'skip';
     } else {
       next = 'open';
     }
-    // Free user clicked on close state (shouldn't happen via cycle, but guard)
-    if (next === 'close' && !isPro) {
+    if ((next === 'close' || next === 'both') && !isPro) {
       showUpgrade(null);
       return;
     }
@@ -1502,9 +1774,10 @@
     btn.disabled = true;
     btn.textContent = 'Saving…';
 
-    const openApps  = capturedApps.filter((_, i) => appModes.get(i) === 'open');
-    const closeApps = capturedApps.filter((_, i) => appModes.get(i) === 'close')
-                                  .map(a => ({ name: a.name }));
+    const openApps  = capturedApps.filter((_, i) => { const m = appModes.get(i); return m === 'open' || m === 'both'; });
+    const closeApps = capturedApps
+      .filter((_, i) => { const m = appModes.get(i); return m === 'close' || m === 'both'; })
+      .map(a => ({ name: String(a.name).slice(0, 128) }));
     if (!openApps.length) {
       btn.disabled = false;
       btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
@@ -1512,7 +1785,7 @@
       return;
     }
 
-    const focusMode = document.getElementById('focus-mode-select')?.value || undefined;
+    const focusMode = currentFocusMode || undefined;
     const workflow = {
       id:   editingWorkflowId || slug(name) + '-' + Date.now(),
       name,
@@ -1549,9 +1822,7 @@
     capturedApps = [];
     appModes = new Map();
     editingWorkflowId = null;
-    document.getElementById('focus-row').style.display = 'none';
-    const sel = document.getElementById('focus-mode-select');
-    if (sel) sel.value = '';
+    currentFocusMode = null;
     showView('view-list');
   }
 
@@ -1559,16 +1830,37 @@
 
   let editingWorkflowId = null;
 
-  function openEdit(workflow) {
+  async function openEdit(workflow) {
     editingWorkflowId = workflow.id;
-    // Merge open + close lists into capturedApps with modes pre-set
-    capturedApps = [
-      ...workflow.apps,
-      ...(workflow.closeApps || []),
-    ];
+    const rawApps      = workflow.apps || [];
+    const rawCloseApps = workflow.closeApps || [];
+    const closeNames   = new Set(rawCloseApps.map(a => a.name));
+    const openNames    = new Set(rawApps.map(a => a.name));
+    capturedApps = [...rawApps];
+    rawCloseApps.forEach(closeApp => {
+      if (!openNames.has(closeApp.name)) {
+        capturedApps.push({ name: closeApp.name, urlToOpen: '', folderPath: '', filePath: '' });
+      }
+    });
     appModes = new Map();
-    workflow.apps.forEach((_, i) => appModes.set(i, 'open'));
-    (workflow.closeApps || []).forEach((_, j) => appModes.set(workflow.apps.length + j, 'close'));
+    capturedApps.forEach((app, index) => {
+      const hasOpen  = openNames.has(app.name);
+      const hasClose = closeNames.has(app.name);
+      if (hasOpen && hasClose)  appModes.set(index, 'both');
+      else if (hasOpen)         appModes.set(index, 'open');
+      else if (hasClose)        appModes.set(index, 'close');
+      else                      appModes.set(index, 'skip');
+    });
+
+    try {
+      const live = await window.api.captureState();
+      const knownKeys = new Set(capturedApps.map(appItemKey));
+      (live?.apps || []).forEach(a => {
+        if (knownKeys.has(appItemKey(a))) return;
+        capturedApps.push(a);
+        appModes.set(capturedApps.length - 1, 'skip');
+      });
+    } catch(e) {}
 
     showView('view-capture');
 
@@ -1587,7 +1879,7 @@
     document.getElementById('capture-section-label').textContent =
       `${capturedApps.length} item${capturedApps.length !== 1 ? 's' : ''}`;
 
-    renderPreview(true);
+    renderPreview(true, true);
 
     const input = document.getElementById('workflow-name');
     input.value = workflow.name;
@@ -1596,19 +1888,7 @@
     saveBtn.textContent = 'Save changes';
 
     // Pre-select focus mode if set
-    if (workflow.focusMode) {
-      window.api.getFocusModes().then(modes => {
-        const sel = document.getElementById('focus-mode-select');
-        sel.innerHTML = '<option value="">None</option>';
-        (modes || []).forEach(m => {
-          const opt = document.createElement('option');
-          opt.value = m; opt.textContent = m;
-          if (m === workflow.focusMode) opt.selected = true;
-          sel.appendChild(opt);
-        });
-        document.getElementById('focus-row').style.display = 'flex';
-      }).catch(() => {});
-    }
+    currentFocusMode = workflow.focusMode || null;
   }
 
   // ── Delete flow ───────────────────────────────────────────────────────────
@@ -1623,7 +1903,7 @@
       await window.api.deleteWorkflow(workflow.id);
       await loadWorkflows();
       if (pendingDeletes.size === 0) showToast('Workflow deleted.');
-    }, 1500);
+    }, 4500);
 
     pendingDeletes.set(workflow.id, { timer, name: workflow.name });
 
@@ -1633,8 +1913,8 @@
     const label = count > 1 ? `Deleting ${count} workflows — ` : `Deleting "${workflow.name}" — `;
     const msg = document.createTextNode(label);
     const undoBtn = document.createElement('button');
-    undoBtn.setAttribute('style', 'background:none;border:none;color:var(--helm-gold);font:inherit;font-weight:600;cursor:pointer;padding:0');
-    undoBtn.textContent = 'Undo all';
+    undoBtn.setAttribute('style', 'background:rgba(212,175,106,0.12);border:0.5px solid var(--helm-gold);color:var(--helm-gold);font:inherit;font-weight:600;cursor:pointer;padding:3px 10px;border-radius:6px;margin-left:8px;');
+    undoBtn.textContent = 'Undo';
     el.appendChild(msg);
     el.appendChild(undoBtn);
     el.classList.add('visible');
@@ -1737,7 +2017,8 @@
 
   let alertDismissTimer = null;
   window.api.onWorkflowWarning(({ type, mode }) => {
-    if (type !== 'FOCUS_SHORTCUT_MISSING') return;
+    if (type !== 'FOCUS_SHORTCUT_MISSING' && type !== 'FOCUS_DISABLE_SHORTCUT_MISSING') return;
+    const verb = type === 'FOCUS_DISABLE_SHORTCUT_MISSING' ? 'Disable' : 'Enable';
     const bar = document.getElementById('workflow-alert-bar');
     if (!bar) return;
     if (alertDismissTimer) clearTimeout(alertDismissTimer);
@@ -1745,7 +2026,13 @@
     const wrap = document.createElement('div');
     wrap.className = 'system-alert-bar';
     const msg = document.createElement('span');
-    msg.textContent = `Focus activation requires a macOS Shortcut named ‘Enable ${mode}’. Create it in the Shortcuts app.`;
+    msg.textContent = `Focus ${verb.toLowerCase()} requires a macOS Shortcut named ‘${verb} ${mode}’. `;
+    const openLink = document.createElement('a');
+    openLink.href = '#';
+    openLink.textContent = 'Open Shortcuts';
+    openLink.style.cssText = 'color:var(--helm-gold);text-decoration:underline;cursor:pointer;margin-left:2px;';
+    openLink.addEventListener('click', (ev) => { ev.preventDefault(); window.api.openShortcutsApp(); });
+    msg.appendChild(openLink);
     const dismiss = document.createElement('span');
     dismiss.className = 'system-alert-dismiss';
     dismiss.textContent = '×';
@@ -1791,9 +2078,14 @@
 
     applyWheelState(); // initialize paused — app boots hidden before IPC can fire
 
+    // Sync teardown mode state from main process on every popover show
+    window.api.getTeardownMode().then(on => setModeUI(on));
+    if (window.api.onModeChanged) window.api.onModeChanged(on => setModeUI(on));
+
     window.api.onWindowVisibility(async state => {
       currentVisibility = state;
       applyWheelState();
+      if (state === 'shown') window.api.getTeardownMode().then(on => setModeUI(on));
       // Re-check accessibility on every show so granting permission is reflected immediately
       if (state === 'visible') {
         const hasA11y = await window.api.getAccessibility();
@@ -1843,6 +2135,9 @@
     document.getElementById('s-accessibility-val').textContent = hasA11y ? 'Granted' : 'Not granted';
     document.getElementById('s-accessibility-val').style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
     document.getElementById('s-accessibility-btn').style.display = hasA11y ? 'none' : 'block';
+
+    const modeHotkey = await window.api.getModeToggleHotkey();
+    document.getElementById('s-mode-hotkey-pill').textContent = modeHotkey ? formatHotkey(modeHotkey) : '—';
 
     document.getElementById('settings-overlay').classList.add('visible');
   }

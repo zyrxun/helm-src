@@ -1,9 +1,10 @@
 function run(argv) {
   var modeName = argv[0];
+  var verb = argv[1] === 'disable' ? 'Disable' : 'Enable';
   var app = Application.currentApplication();
   app.includeStandardAdditions = true;
 
-  var sanitizedMode = modeName.replace(/'/g, '');
-  app.doShellScript("shortcuts run 'Enable " + sanitizedMode + "' 2>/dev/null");
-  return 'Focus set: ' + sanitizedMode;
+  var sanitized = modeName.replace(/'/g, '');
+  app.doShellScript("/usr/bin/shortcuts run '" + verb + " " + sanitized + "'");
+  return verb + ' focus: ' + sanitized;
 }

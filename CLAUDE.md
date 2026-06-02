@@ -126,3 +126,7 @@ npm run menu-bar    # tsc + electron electron/main.js  (menu bar app)
 5. Website — dark landing page, grid texture, animated wheel hero
 6. Pitch deck — 10 slides
 7. Mobile app — iOS, same design language
+
+<!-- stripe-projects-cli managed:claude-md:start -->
+look at AGENTS.md for your rules
+<!-- stripe-projects-cli managed:claude-md:end -->
