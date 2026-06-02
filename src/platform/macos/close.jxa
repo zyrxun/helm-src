@@ -1,27 +1,67 @@
 function run(argv) {
   var appName = argv[0];
-  var sys = Application('System Events');
-  var app = Application.currentApplication();
-  app.includeStandardAdditions = true;
+  var urlArg  = argv[1]; // optional — browser tab URL to close
 
-  if (appName === 'Code') {
-    try {
-      var codeApp = Application('Code');
-      if (codeApp.running()) {
-        codeApp.activate();
-        delay(0.2);
-        sys.keystroke('s', { using: ['command down'] });
-        delay(0.1);
+  var browsers = ["Google Chrome", "Safari", "Arc"];
+
+  if (urlArg && browsers.indexOf(appName) !== -1) {
+    var browser = Application(appName);
+    if (!browser.running()) {
+      return "Browser not running";
+    }
+
+    var targetOrigin = urlArg.replace(/^(https?:\/\/[^\/]+).*/, '$1');
+    var closed = false;
+    var isSafari = (appName === "Safari");
+
+    // Strategy 1: exact URL match
+    outerExact: for (var w = 0; w < browser.windows.length; w++) {
+      var tabs = browser.windows[w].tabs;
+      for (var t = 0; t < tabs.length; t++) {
+        var tabUrl = isSafari ? tabs[t].URL() : tabs[t].url();
+        if (tabUrl === urlArg) {
+          tabs[t].close();
+          closed = true;
+          break outerExact;
+        }
       }
+    }
+
+    // Strategy 2: same-origin fallback
+    if (!closed) {
+      outerOrigin: for (var w2 = 0; w2 < browser.windows.length; w2++) {
+        var tabs2 = browser.windows[w2].tabs;
+        for (var t2 = 0; t2 < tabs2.length; t2++) {
+          var u = (isSafari ? tabs2[t2].URL() : tabs2[t2].url()) || '';
+          if (u.indexOf(targetOrigin) === 0) {
+            tabs2[t2].close();
+            closed = true;
+            break outerOrigin;
+          }
+        }
+      }
+    }
+
+    return closed ? "Closed tab: " + urlArg : "No matching tab found";
+  }
+
+  // Non-browser apps
+  var targetApp = Application(appName);
+  if (!targetApp.running()) {
+    return "Not running";
+  }
+
+  // VS Code: save before quit
+  if (appName === "Code" || appName === "Visual Studio Code") {
+    try {
+      targetApp.activate();
+      delay(0.2);
+      var se = Application("System Events");
+      se.keystroke("s", { using: ["command down"] });
+      delay(0.1);
     } catch (e) {}
   }
 
-  try {
-    var targetApp = Application(appName);
-    if (targetApp.running()) {
-      targetApp.quit();
-    }
-  } catch (e) {}
-
-  return 'Closed ' + appName;
+  targetApp.quit();
+  return "Quit " + appName;
 }

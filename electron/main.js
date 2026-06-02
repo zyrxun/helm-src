@@ -312,7 +312,9 @@ function validateWorkflow(w) {
   if (w.closeApps !== undefined) {
     if (!Array.isArray(w.closeApps) || w.closeApps.length > 50) return false;
     for (const a of w.closeApps) {
-      if (!a || !isSafeString(a.name, 128)) return false;
+      if (!a || typeof a !== 'object') return false;
+      if (!isSafeString(a.name, 128)) return false;
+      if (a.urlToOpen !== undefined && !isSafeUrl(a.urlToOpen)) return false;
     }
   }
   return true;
@@ -387,9 +389,11 @@ async function teardownWorkflowById(workflowId) {
     .filter(a => a && isSafeString(a.name, 128))
     .map(a => ({ name: a.name.replace(/'/g, '') }));
   await Promise.all(targets.map(a =>
-    new Promise(resolve =>
-      execFile('osascript', ['-l', 'JavaScript', jxaPath('close.jxa'), a.name],
-        { timeout: 5000 }, () => resolve()))
+    new Promise(resolve => {
+      const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), a.name];
+      if (a.urlToOpen && isSafeUrl(a.urlToOpen)) closeArgs.push(a.urlToOpen);
+      execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
+    })
   ));
 
   if (workflow.focusMode && isSafeString(workflow.focusMode, 128)) {
@@ -421,8 +425,9 @@ async function runWorkflowById(workflowId) {
     const closeTargets = workflow.closeApps.filter(a => a && isSafeString(a.name, 128));
     await Promise.all(closeTargets.map(closeTarget =>
       new Promise(resolve => {
-        execFile('osascript', ['-l', 'JavaScript', jxaPath('close.jxa'), closeTarget.name],
-          { timeout: 5000 }, () => resolve());
+        const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), closeTarget.name];
+        if (closeTarget.urlToOpen && isSafeUrl(closeTarget.urlToOpen)) closeArgs.push(closeTarget.urlToOpen);
+        execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
       })
     ));
   }

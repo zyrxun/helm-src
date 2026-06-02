@@ -1347,6 +1347,7 @@
   }
 
   async function setMode(on) {
+    if (on && !isPro) { showUpgrade(null); return; }
     await window.api.setTeardownMode(on);
     setModeUI(on);
   }
@@ -1775,9 +1776,14 @@
     btn.textContent = 'Saving…';
 
     const openApps  = capturedApps.filter((_, i) => { const m = appModes.get(i); return m === 'open' || m === 'both'; });
+    const BROWSERS = new Set(['Google Chrome', 'Safari', 'Arc']);
     const closeApps = capturedApps
       .filter((_, i) => { const m = appModes.get(i); return m === 'close' || m === 'both'; })
-      .map(a => ({ name: String(a.name).slice(0, 128) }));
+      .map(a => {
+        const entry = { name: String(a.name).slice(0, 128) };
+        if (BROWSERS.has(a.name) && a.urlToOpen) entry.urlToOpen = String(a.urlToOpen).slice(0, 2048);
+        return entry;
+      });
     if (!openApps.length) {
       btn.disabled = false;
       btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';

@@ -37,6 +37,13 @@
 
 - [ ] Spotify Web API integration — OAuth login to browse + save specific playlists (not just current track); requires Spotify Developer app + token refresh flow
 - [ ] Per-app refresh in workflow edit view — "re-capture this app" button on individual rows so e.g. Spotify track can be updated without rebuilding the whole workflow
+- [ ] Shareable workflow cards (v1.1 growth feature) — on workflow save, offer to generate a shareable PNG card showing the stack (workflow name + app list + Helm branding); Canvas API client-side, no backend needed. Buttons: Copy image, Copy tweet. Follow-up v1.2: shareable get-helm.app/stack#[base64] URL with Open Graph preview for Twitter/iMessage link previews. Ship 2–3 weeks post-launch once users are attached to the product.
+
+## Domain & email (get-helm.app)
+
+- [ ] Cloudflare Pages — push landing page HTML to GitHub repo, connect get-helm.app as custom domain
+- [ ] Email forwarding — set up hello@get-helm.app → personal Gmail in Cloudflare (free, 5 min)
+- [ ] Resend domain verification — verify get-helm.app in Resend so license keys send from noreply@get-helm.app
 
 ## Before public launch (needs external accounts)
 
@@ -45,4 +52,4 @@
 - [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
 - [ ] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [ ] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
-- [ ] Website / landing page — needed for support, changelog, and purchase link before distributing to public
+- [x] Website / landing page — launch and prelaunch HTML ready
