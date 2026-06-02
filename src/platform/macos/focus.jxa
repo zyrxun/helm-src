@@ -1,0 +1,9 @@
+function run(argv) {
+  var modeName = argv[0];
+  var app = Application.currentApplication();
+  app.includeStandardAdditions = true;
+
+  var sanitizedMode = modeName.replace(/'/g, '');
+  app.doShellScript("shortcuts run 'Enable " + sanitizedMode + "' 2>/dev/null");
+  return 'Focus set: ' + sanitizedMode;
+}

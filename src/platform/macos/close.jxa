@@ -1,0 +1,27 @@
+function run(argv) {
+  var appName = argv[0];
+  var sys = Application('System Events');
+  var app = Application.currentApplication();
+  app.includeStandardAdditions = true;
+
+  if (appName === 'Code') {
+    try {
+      var codeApp = Application('Code');
+      if (codeApp.running()) {
+        codeApp.activate();
+        delay(0.2);
+        sys.keystroke('s', { using: ['command down'] });
+        delay(0.1);
+      }
+    } catch (e) {}
+  }
+
+  try {
+    var targetApp = Application(appName);
+    if (targetApp.running()) {
+      targetApp.quit();
+    }
+  } catch (e) {}
+
+  return 'Closed ' + appName;
+}

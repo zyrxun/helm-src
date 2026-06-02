@@ -25,6 +25,25 @@ const license = require('./license');
 
 const FREE_LIMIT = 2;
 
+// ── Focus mode list ───────────────────────────────────────────────────────────
+async function getFocusModes() {
+  const fs = require('fs').promises;
+  const os = require('os');
+  const dbPath = path.join(os.homedir(), 'Library/DoNotDisturb/DB/ModeConfigurations.json');
+  try {
+    const raw = await fs.readFile(dbPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    const modesConfig = parsed.data?.[0]?.modeConfigurations;
+    if (!modesConfig) return ['Do Not Disturb'];
+    const modes = Object.values(modesConfig)
+      .map(entry => entry?.mode?.name)
+      .filter(name => typeof name === 'string' && name.trim().length > 0);
+    return modes.length > 0 ? modes.sort() : ['Do Not Disturb'];
+  } catch(e) {
+    return ['Do Not Disturb'];
+  }
+}
+
 // ── VS Code open-file resolver ────────────────────────────────────────────────
 // Reads each open workspace's state.vscdb to get actual editor tabs, not just folder paths.
 function enrichCodeApps(apps) {
@@ -283,6 +302,13 @@ function validateWorkflow(w) {
     if (app.filePath !== undefined &&
         !isSafeString(app.filePath, 512))        return false;
   }
+  if (w.focusMode !== undefined && !isSafeString(w.focusMode, 128)) return false;
+  if (w.closeApps !== undefined) {
+    if (!Array.isArray(w.closeApps) || w.closeApps.length > 50) return false;
+    for (const a of w.closeApps) {
+      if (!a || !isSafeString(a.name, 128)) return false;
+    }
+  }
   return true;
 }
 
@@ -297,7 +323,7 @@ function validateHotkeyStr(hotkey) {
   return /^[A-Za-z0-9+]+$/.test(hotkey);
 }
 
-function runWorkflowById(workflowId) {
+async function runWorkflowById(workflowId) {
   if (!isSafeId(workflowId)) return { ok: false, error: 'Invalid workflow id' };
   if (!hasAccessibility()) return { ok: false, error: 'accessibility_denied' };
 
@@ -305,6 +331,18 @@ function runWorkflowById(workflowId) {
   const workflow  = workflows.find(w => w.id === workflowId);
   if (!workflow) return { ok: false, error: 'Workflow not found' };
 
+  // 1. Close apps — fully resolved before any launch begins
+  if (Array.isArray(workflow.closeApps) && workflow.closeApps.length > 0) {
+    const closeTargets = workflow.closeApps.filter(a => a && isSafeString(a.name, 128));
+    await Promise.all(closeTargets.map(closeTarget =>
+      new Promise(resolve => {
+        execFile('osascript', ['-l', 'JavaScript', jxaPath('close.jxa'), closeTarget.name],
+          { timeout: 5000 }, () => resolve());
+      })
+    ));
+  }
+
+  // 2. Open apps
   workflow.apps.forEach(appTarget => {
     if (!isSafeString(appTarget.name, 128)) return;
     const url = appTarget.folderPath
@@ -312,13 +350,22 @@ function runWorkflowById(workflowId) {
       : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
     const args = ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url];
     if (appTarget.filePath && isSafeString(appTarget.filePath, 512)) args.push(appTarget.filePath);
-    execFile(
-      'osascript',
-      args,
-      { maxBuffer: 1024 * 1024 * 10 },
-      () => {}
-    );
+    execFile('osascript', args, { maxBuffer: 1024 * 1024 * 10 }, () => {});
   });
+
+  // 3. Trigger Focus mode concurrently — non-zero exit sends warning to renderer
+  if (workflow.focusMode && isSafeString(workflow.focusMode, 128)) {
+    execFile('osascript', ['-l', 'JavaScript', jxaPath('focus.jxa'), workflow.focusMode],
+      { timeout: 3000 }, (err) => {
+        if (err && win) {
+          win.webContents.send('workflow-warning', {
+            type: 'FOCUS_SHORTCUT_MISSING',
+            mode: workflow.focusMode
+          });
+        }
+      });
+  }
+
   return { ok: true };
 }
 
@@ -336,7 +383,8 @@ function registerWorkflowShortcuts() {
 
 // ── IPC handlers ──────────────────────────────────────────────────────────────
 
-ipcMain.handle('get-workflows', () => storage.load());
+ipcMain.handle('get-workflows',   () => storage.load());
+ipcMain.handle('get-focus-modes', () => getFocusModes());
 
 ipcMain.handle('run-workflow', (_, workflowId) => runWorkflowById(workflowId));
 
@@ -400,6 +448,11 @@ ipcMain.handle('save-workflow', (_, workflow) => {
       })),
       // preserve existing hotkey — save-workflow doesn't touch it
       ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),
+      ...(workflow.focusMode ? { focusMode: String(workflow.focusMode).slice(0, 128) } : {}),
+      // closeApps is Pro-only — stripped server-side for free users regardless of what renderer sends
+      ...(isUserAuthorized() && Array.isArray(workflow.closeApps) && workflow.closeApps.length > 0
+        ? { closeApps: workflow.closeApps.map(a => ({ name: String(a.name).slice(0, 128) })) }
+        : {}),
     };
 
     if (idx >= 0) workflows[idx] = safe;

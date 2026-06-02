@@ -515,7 +515,7 @@
     }
     .preview-item.deselected:hover { opacity: 0.55; border-color: rgba(212,175,106,0.2); }
 
-    /* Custom checkbox */
+    /* 3-state toggle */
     .item-check {
       width: 16px;
       height: 16px;
@@ -526,13 +526,99 @@
       align-items: center;
       justify-content: center;
       background: transparent;
+      transition: background 0.1s, border-color 0.1s;
     }
-    .preview-item:not(.deselected) .item-check {
+    /* open state — gold fill */
+    .preview-item[data-mode="open"] .item-check {
       background: var(--helm-gold);
       border-color: var(--helm-gold);
     }
-    .item-check svg { display: none; }
-    .preview-item:not(.deselected) .item-check svg { display: block; }
+    .preview-item[data-mode="open"] .item-check .check-icon { display: block; }
+    .preview-item[data-mode="open"] .item-check .close-icon { display: none; }
+    .preview-item[data-mode="open"] .item-check .lock-icon  { display: none; }
+    /* close state — chalk hairline with × */
+    .preview-item[data-mode="close"] .item-check {
+      background: transparent;
+      border-color: var(--helm-chalk);
+    }
+    .preview-item[data-mode="close"] .item-check .check-icon { display: none; }
+    .preview-item[data-mode="close"] .item-check .close-icon { display: block; }
+    .preview-item[data-mode="close"] .item-check .lock-icon  { display: none; }
+    /* close-locked state — fog lock for free users */
+    .preview-item[data-mode="close-locked"] .item-check {
+      background: transparent;
+      border-color: rgba(200,196,188,0.25);
+    }
+    .preview-item[data-mode="close-locked"] .item-check .check-icon { display: none; }
+    .preview-item[data-mode="close-locked"] .item-check .close-icon { display: none; }
+    .preview-item[data-mode="close-locked"] .item-check .lock-icon  { display: block; }
+    /* skip state — dim entire row */
+    .preview-item[data-mode="skip"] { opacity: 0.25; }
+    .preview-item[data-mode="skip"] .item-check { background: transparent; border-color: rgba(247,244,239,0.15); }
+    .preview-item[data-mode="skip"] .item-check svg { display: none; }
+    /* hide all icons by default */
+    .item-check .check-icon, .item-check .close-icon, .item-check .lock-icon { display: none; }
+
+    /* Workflow card metadata line */
+    .card-metadata {
+      font-family: var(--font-ui);
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--helm-fog);
+      opacity: 0.6;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 1px;
+    }
+    /* Focus mode picker row */
+    .focus-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .focus-label {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      color: var(--helm-fog);
+      flex-shrink: 0;
+    }
+    .focus-select {
+      flex: 1;
+      background: var(--helm-navy);
+      border: 0.5px solid rgba(200,196,188,0.2);
+      border-radius: 6px;
+      color: var(--helm-chalk);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      padding: 4px 8px;
+      outline: none;
+      cursor: pointer;
+    }
+    .focus-select:focus { border-color: rgba(212,175,106,0.5); }
+    /* Inline system alert bar */
+    .system-alert-bar {
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--helm-fog);
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      background: transparent;
+    }
+    .system-alert-dismiss {
+      cursor: pointer;
+      color: var(--helm-fog);
+      opacity: 0.5;
+      font-family: var(--font-mono);
+      margin-left: 8px;
+      flex-shrink: 0;
+    }
+    .system-alert-dismiss:hover { opacity: 1; }
 
     .preview-app {
       font-family: var(--font-ui);
@@ -825,6 +911,7 @@
     <div style="font-family:var(--font-ui);font-size:11px;color:var(--helm-fog);line-height:1.5">Device allocation limit reached (2/2). Contact support to transfer license allocations.</div>
   </div>
 
+  <div id="workflow-alert-bar" style="display:none"></div>
   <footer class="helm-footer">
     <button class="footer-btn muted" onclick="showSettings()">Settings</button>
     <button class="add-btn" id="add-btn" onclick="startCapture()">
@@ -859,6 +946,12 @@
   <div class="capture-form" id="capture-form" style="display:none">
     <div class="section-label">Name this workflow</div>
     <input class="helm-input" id="workflow-name" type="text" placeholder="e.g. Morning stack" maxlength="40"/>
+    <div class="focus-row" id="focus-row" style="display:none">
+      <span class="focus-label">Focus mode</span>
+      <select class="focus-select" id="focus-mode-select">
+        <option value="">None</option>
+      </select>
+    </div>
     <button class="primary-btn" id="btn-save" onclick="saveWorkflow()">Save workflow</button>
   </div>
 </div>
@@ -1011,6 +1104,10 @@
       row.id = 'row-' + w.id;
 
       const uniqueApps = [...new Set(w.apps.map(a => a.name))].join(' · ');
+      const metaParts = [];
+      if (w.focusMode) metaParts.push('Focus: ' + w.focusMode);
+      if (w.closeApps && w.closeApps.length) metaParts.push('Close: ' + w.closeApps.map(a => a.name).join(', '));
+      const metaText = metaParts.join('  ·  ');
 
       const btn = document.createElement('div');
       btn.className = 'run-btn';
@@ -1034,6 +1131,12 @@
 
       info.appendChild(nameEl);
       info.appendChild(summaryEl);
+      if (metaText) {
+        const metaEl = document.createElement('div');
+        metaEl.className = 'card-metadata';
+        metaEl.textContent = metaText;
+        info.appendChild(metaEl);
+      }
 
       const pill = document.createElement('div');
       pill.className = 'hotkey-pill' + (w.hotkey ? ' has-hotkey' : '');
@@ -1177,8 +1280,8 @@
     renderPreview();
   }
 
-  // selectedSet tracks indices of selected items (all selected by default)
-  let selectedSet = new Set();
+  // appModes: Map<index, 'open'|'close'|'skip'> — replaces selectedSet
+  let appModes = new Map();
 
   function renderPreview(preserveSelection = false) {
     const count = capturedApps.length;
@@ -1186,7 +1289,7 @@
       `${count} item${count !== 1 ? 's' : ''} detected`;
 
     if (!preserveSelection) {
-      selectedSet = new Set(capturedApps.map((_, i) => i)); // all selected
+      appModes = new Map(capturedApps.map((_, i) => [i, 'open'])); // all open by default
     }
 
     const listEl = document.getElementById('preview-list');
@@ -1197,12 +1300,21 @@
       listEl.innerHTML = '';
       capturedApps.forEach((a, i) => {
         const row = document.createElement('div');
-        row.className = 'preview-item' + (selectedSet.has(i) ? '' : ' deselected');
+        const mode = appModes.get(i) || 'open';
+        row.className = 'preview-item';
         row.dataset.index = i;
+        row.dataset.mode = mode;
         row.innerHTML = `
           <div class="item-check">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <svg class="check-icon" width="10" height="10" viewBox="0 0 10 10" fill="none">
               <polyline points="1.5,5 4,7.5 8.5,2.5" stroke="#0A1628" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <svg class="close-icon" width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path d="M1 1L9 9M9 1L1 9" stroke="var(--helm-chalk)" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <svg class="lock-icon" width="10" height="10" viewBox="0 0 10 10" fill="none" style="opacity:0.4">
+              <rect x="1.5" y="4.5" width="7" height="5" rx="1" stroke="var(--helm-fog)" stroke-width="1"/>
+              <path d="M3.5 4.5V3a1.5 1.5 0 013 0v1.5" stroke="var(--helm-fog)" stroke-width="1"/>
             </svg>
           </div>`;
 
@@ -1312,6 +1424,21 @@
         listEl.appendChild(row);
       });
 
+      // Populate focus mode dropdown
+      window.api.getFocusModes().then(modes => {
+        const sel = document.getElementById('focus-mode-select');
+        const current = sel.value;
+        sel.innerHTML = '<option value="">None</option>';
+        (modes || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m;
+          opt.textContent = m;
+          if (m === current) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        document.getElementById('focus-row').style.display = 'flex';
+      }).catch(() => {});
+
       document.getElementById('select-bar').style.display = 'flex';
       updateSelectBar();
     }
@@ -1326,32 +1453,42 @@
   }
 
   function toggleItem(i) {
-    if (selectedSet.has(i)) selectedSet.delete(i);
-    else selectedSet.add(i);
-
+    const current = appModes.get(i) || 'open';
+    let next;
+    if (current === 'open') {
+      // Pro: cycle open → close → skip. Free: cycle open → skip.
+      next = isPro ? 'close' : 'skip';
+    } else if (current === 'close') {
+      next = 'skip';
+    } else {
+      next = 'open';
+    }
+    // Free user clicked on close state (shouldn't happen via cycle, but guard)
+    if (next === 'close' && !isPro) {
+      showUpgrade(null);
+      return;
+    }
+    appModes.set(i, next);
     const row = document.querySelector(`.preview-item[data-index="${i}"]`);
-    if (row) row.classList.toggle('deselected', !selectedSet.has(i));
+    if (row) row.dataset.mode = next;
     updateSelectBar();
   }
 
   function updateSelectBar() {
     const total    = capturedApps.length;
-    const selected = selectedSet.size;
+    const active   = [...appModes.values()].filter(m => m !== 'skip').length;
     document.getElementById('select-count').textContent =
-      `${selected} of ${total} selected`;
+      `${active} of ${total} selected`;
     document.getElementById('select-toggle').textContent =
-      selected === total ? 'Deselect all' : 'Select all';
+      active === total ? 'Deselect all' : 'Select all';
   }
 
   function toggleSelectAll() {
-    if (selectedSet.size === capturedApps.length) {
-      selectedSet.clear();
-    } else {
-      capturedApps.forEach((_, i) => selectedSet.add(i));
-    }
+    const allActive = [...appModes.values()].every(m => m !== 'skip');
+    capturedApps.forEach((_, i) => appModes.set(i, allActive ? 'skip' : 'open'));
     document.querySelectorAll('.preview-item[data-index]').forEach(row => {
       const i = parseInt(row.dataset.index);
-      row.classList.toggle('deselected', !selectedSet.has(i));
+      row.dataset.mode = appModes.get(i);
     });
     updateSelectBar();
   }
@@ -1365,18 +1502,23 @@
     btn.disabled = true;
     btn.textContent = 'Saving…';
 
-    const selectedApps = capturedApps.filter((_, i) => selectedSet.has(i));
-    if (!selectedApps.length) {
+    const openApps  = capturedApps.filter((_, i) => appModes.get(i) === 'open');
+    const closeApps = capturedApps.filter((_, i) => appModes.get(i) === 'close')
+                                  .map(a => ({ name: a.name }));
+    if (!openApps.length) {
       btn.disabled = false;
       btn.textContent = editingWorkflowId ? 'Save changes' : 'Save workflow';
-      showToast('Select at least one app to save.');
+      showToast('Select at least one app to open.');
       return;
     }
 
+    const focusMode = document.getElementById('focus-mode-select')?.value || undefined;
     const workflow = {
       id:   editingWorkflowId || slug(name) + '-' + Date.now(),
       name,
-      apps: selectedApps,
+      apps: openApps,
+      ...(closeApps.length > 0 ? { closeApps } : {}),
+      ...(focusMode ? { focusMode } : {}),
     };
 
     let result;
@@ -1405,7 +1547,11 @@
   function cancelCapture() {
     captureGen++; // invalidate any in-flight captureState promise
     capturedApps = [];
+    appModes = new Map();
     editingWorkflowId = null;
+    document.getElementById('focus-row').style.display = 'none';
+    const sel = document.getElementById('focus-mode-select');
+    if (sel) sel.value = '';
     showView('view-list');
   }
 
@@ -1415,7 +1561,14 @@
 
   function openEdit(workflow) {
     editingWorkflowId = workflow.id;
-    capturedApps = workflow.apps;
+    // Merge open + close lists into capturedApps with modes pre-set
+    capturedApps = [
+      ...workflow.apps,
+      ...(workflow.closeApps || []),
+    ];
+    appModes = new Map();
+    workflow.apps.forEach((_, i) => appModes.set(i, 'open'));
+    (workflow.closeApps || []).forEach((_, j) => appModes.set(workflow.apps.length + j, 'close'));
 
     showView('view-capture');
 
@@ -1434,13 +1587,28 @@
     document.getElementById('capture-section-label').textContent =
       `${capturedApps.length} item${capturedApps.length !== 1 ? 's' : ''}`;
 
-    renderPreview(false);
+    renderPreview(true);
 
     const input = document.getElementById('workflow-name');
     input.value = workflow.name;
 
     const saveBtn = document.getElementById('btn-save');
     saveBtn.textContent = 'Save changes';
+
+    // Pre-select focus mode if set
+    if (workflow.focusMode) {
+      window.api.getFocusModes().then(modes => {
+        const sel = document.getElementById('focus-mode-select');
+        sel.innerHTML = '<option value="">None</option>';
+        (modes || []).forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m; opt.textContent = m;
+          if (m === workflow.focusMode) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        document.getElementById('focus-row').style.display = 'flex';
+      }).catch(() => {});
+    }
   }
 
   // ── Delete flow ───────────────────────────────────────────────────────────
@@ -1566,6 +1734,28 @@
       errEl.classList.add('visible');
     }
   }
+
+  let alertDismissTimer = null;
+  window.api.onWorkflowWarning(({ type, mode }) => {
+    if (type !== 'FOCUS_SHORTCUT_MISSING') return;
+    const bar = document.getElementById('workflow-alert-bar');
+    if (!bar) return;
+    if (alertDismissTimer) clearTimeout(alertDismissTimer);
+    bar.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.className = 'system-alert-bar';
+    const msg = document.createElement('span');
+    msg.textContent = `Focus activation requires a macOS Shortcut named ‘Enable ${mode}’. Create it in the Shortcuts app.`;
+    const dismiss = document.createElement('span');
+    dismiss.className = 'system-alert-dismiss';
+    dismiss.textContent = '×';
+    dismiss.addEventListener('click', () => { bar.style.display = 'none'; bar.innerHTML = ''; });
+    wrap.appendChild(msg);
+    wrap.appendChild(dismiss);
+    bar.appendChild(wrap);
+    bar.style.display = 'block';
+    alertDismissTimer = setTimeout(() => { bar.style.display = 'none'; bar.innerHTML = ''; }, 12000);
+  });
 
   window.api.onLicenseActivated(({ email }) => {
     setProState(true);

@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('api', {
   requestAccessibility:   ()  => ipcRenderer.invoke('request-accessibility'),
   sendFeedback:           (o) => ipcRenderer.invoke('send-feedback', o),
   setHotkey:              (id, accelerator) => ipcRenderer.invoke('set-hotkey', id, accelerator),
+  getFocusModes:          ()  => ipcRenderer.invoke('get-focus-modes'),
+  onWorkflowWarning:      (cb) => ipcRenderer.on('workflow-warning', (_, data) => cb(data)),
   onLicenseActivated:     (cb) => ipcRenderer.on('license-activated',      (_, data) => cb(data)),
   onLicenseStatusChanged: (cb) => ipcRenderer.on('license-status-changed', (_, data) => cb(data)),
   onUpdateDownloaded:     (cb) => ipcRenderer.on('update-downloaded',      (_, data) => cb(data)),
