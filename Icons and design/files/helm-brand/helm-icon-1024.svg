@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="224" fill="#0A1628"/>
+  <g opacity="0.05">
+    <defs>
+      <pattern id="grid" width="56" height="56" patternUnits="userSpaceOnUse">
+        <path d="M 56 0 L 0 0 0 56" fill="none" stroke="#D4AF6A" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <rect width="1024" height="1024" rx="224" fill="url(#grid)"/>
+  </g>
+  <g transform="translate(512,512)">
+    <circle r="389" fill="none" stroke="#D4AF6A" stroke-width="36"/>
+    <circle cy="-430" r="66" fill="#D4AF6A"/>
+    <circle cy="430"  r="66" fill="#D4AF6A"/>
+    <circle cx="-430" r="66" fill="#D4AF6A"/>
+    <circle cx="430"  r="66" fill="#D4AF6A"/>
+    <circle cx="-228" cy="-228" r="56" fill="#D4AF6A"/>
+    <circle cx="228"  cy="-228" r="56" fill="#D4AF6A"/>
+    <circle cx="-228" cy="228"  r="56" fill="#D4AF6A"/>
+    <circle cx="228"  cy="228"  r="56" fill="#D4AF6A"/>
+    <line x1="0" y1="-364" x2="0"    y2="364"  stroke="#D4AF6A" stroke-width="33" stroke-linecap="round"/>
+    <line x1="-364" y1="0" x2="364"  y2="0"    stroke="#D4AF6A" stroke-width="33" stroke-linecap="round"/>
+    <line x1="-258" y1="-258" x2="258" y2="258" stroke="#D4AF6A" stroke-width="33" stroke-linecap="round"/>
+    <line x1="258"  y1="-258" x2="-258" y2="258" stroke="#D4AF6A" stroke-width="33" stroke-linecap="round"/>
+    <circle r="92" fill="#0A1628" stroke="#D4AF6A" stroke-width="33"/>
+    <circle r="36" fill="#D4AF6A"/>
+  </g>
+</svg>

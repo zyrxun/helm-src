@@ -1,0 +1,130 @@
+/* ============================================================
+   Helm Design System — Tokens
+   Color, type, spacing, radii, motion.
+   Two anchors, one signal. Nothing else.
+   ============================================================ */
+
+/* Web fonts — substituted from Google Fonts.
+   FLAG: real Helm ships with the same families, hosted however you like;
+   swap @import for local @font-face if shipping offline. */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ---------- Color (raw) ---------- */
+  --helm-abyss: #0A1628;          /* foundation — deep warm navy, not black */
+  --helm-navy: #1E3A5F;           /* card surface — one step lighter than abyss */
+  --helm-gold: #D4AF6A;           /* Sovereign Gold — the brand color */
+  --helm-gold-pressed: #B8922A;   /* Burnished Gold — pressed state */
+  --helm-green: #30D158;          /* Clearance — running / ready signal */
+  --helm-green-hub: #0d1f0f;      /* hub fill inside the running mark */
+  --helm-chalk: #F7F4EF;          /* primary text on dark */
+  --helm-fog: #C8C4BC;            /* secondary text — labels, metadata */
+  --helm-alert: #FF453A;          /* error only */
+
+  /* ---------- Color (semantic) ---------- */
+  --bg: var(--helm-abyss);
+  --surface: var(--helm-navy);
+  --surface-hover: #24446e;       /* derived — one nudge from navy, not a new color */
+  --fg: var(--helm-chalk);
+  --fg-muted: var(--helm-fog);
+  --accent: var(--helm-gold);
+  --accent-pressed: var(--helm-gold-pressed);
+  --signal: var(--helm-green);
+  --danger: var(--helm-alert);
+  --border: rgba(247, 244, 239, 0.08);  /* hairline on dark surfaces */
+  --border-strong: var(--helm-gold);    /* the only colored border */
+
+  /* ---------- Type ---------- */
+  --font-display: 'Playfair Display', 'Georgia', serif;
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale */
+  --t-hero: 64px;       /* Playfair Display 700 — "Take the wheel." */
+  --t-display: 40px;    /* Playfair Display 700 — secondary display */
+  --t-h1: 28px;         /* Inter 700 — UI headlines */
+  --t-h2: 20px;         /* Inter 700 */
+  --t-h3: 16px;         /* Inter 600 */
+  --t-body: 14px;       /* Inter 400/500 */
+  --t-label: 13px;      /* Inter 500 */
+  --t-meta: 12px;       /* Inter 500 — metadata, app names */
+  --t-mono: 13px;       /* JetBrains Mono — code, paths */
+
+  --lh-tight: 1.1;
+  --lh-snug: 1.25;
+  --lh-normal: 1.45;
+  --lh-loose: 1.6;
+
+  --track-display: 0.06em;   /* wordmark + Playfair headlines */
+  --track-tight: -0.01em;    /* Inter headlines */
+  --track-normal: 0;
+
+  /* ---------- Spacing ---------- */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;   /* popover horizontal margin */
+  --s-4: 14px;   /* component internal padding (upper) */
+  --s-5: 16px;
+  --s-6: 20px;   /* section gap (lower) */
+  --s-7: 24px;   /* section gap (upper) */
+  --s-8: 32px;
+  --s-9: 48px;
+
+  /* ---------- Radii ---------- */
+  --r-button: 7px;
+  --r-card: 10px;
+  --r-window: 14px;
+
+  /* ---------- Borders ---------- */
+  --bw-hairline: 0.5px;
+
+  /* ---------- Motion ---------- */
+  --spin-slow: 16s;     /* app icon, decorative wheel */
+  --spin-fast: 1.8s;    /* running-state wheel */
+  --ease: linear;       /* the only easing the brand uses for the wheel */
+}
+
+/* ============================================================
+   Base typography presets — apply to elements, not classes,
+   so HTML written without classes still looks like Helm.
+   ============================================================ */
+.helm-display-hero,
+.helm-display {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: var(--track-display);
+  line-height: var(--lh-tight);
+}
+.helm-display-hero { font-size: var(--t-hero); }
+.helm-display { font-size: var(--t-display); }
+
+.helm-h1 { font-family: var(--font-ui); font-weight: 700; font-size: var(--t-h1); line-height: var(--lh-snug); letter-spacing: var(--track-tight); }
+.helm-h2 { font-family: var(--font-ui); font-weight: 700; font-size: var(--t-h2); line-height: var(--lh-snug); letter-spacing: var(--track-tight); }
+.helm-h3 { font-family: var(--font-ui); font-weight: 600; font-size: var(--t-h3); line-height: var(--lh-snug); }
+.helm-body { font-family: var(--font-ui); font-weight: 400; font-size: var(--t-body); line-height: var(--lh-normal); }
+.helm-label { font-family: var(--font-ui); font-weight: 500; font-size: var(--t-label); line-height: var(--lh-snug); color: var(--fg-muted); }
+.helm-meta { font-family: var(--font-ui); font-weight: 500; font-size: var(--t-meta); line-height: var(--lh-snug); color: var(--fg-muted); }
+.helm-mono { font-family: var(--font-mono); font-weight: 400; font-size: var(--t-mono); }
+
+/* ============================================================
+   The Nautical Grid — signature background texture.
+   Gold lines, 5% opacity, fading to nothing at edges via radial vignette.
+   Apply to large background fields ONLY. Never on cards.
+   ============================================================ */
+.helm-grid-bg {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse at center, transparent 0%, var(--bg) 85%),
+    linear-gradient(to right, rgba(212, 175, 106, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(212, 175, 106, 0.05) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+}
+
+/* ============================================================
+   The wheel — the only motion in the system.
+   ============================================================ */
+@keyframes helm-spin {
+  to { transform: rotate(360deg); }
+}
+.helm-spin-slow { animation: helm-spin var(--spin-slow) var(--ease) infinite; transform-origin: center; }
+.helm-spin-fast { animation: helm-spin var(--spin-fast) var(--ease) infinite; transform-origin: center; }

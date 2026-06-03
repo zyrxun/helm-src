@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "project": {
+    "merchantId": "acct_1TczwQBnVArK7cjw",
+    "merchantDisplayName": null,
+    "projectId": "project_61UmOlD3QoJpOsC2S16UmNtm4sLXCmevajUXZVKLILJY",
+    "projectName": "workflow-orchestrator",
+    "initializedAt": "2026-05-31T04:16:47.469Z"
+  },
+  "providers": {},
+  "resources": {}
+}

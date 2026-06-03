@@ -7,6 +7,9 @@ public/brand/dmg-background.png
 .DS_Store
 **/.DS_Store
 *.zip
+*.mov
+*.mp4
+HELM_LAUNCH_VIDEO.mov
 
 .projects/cache
 .projects/vault

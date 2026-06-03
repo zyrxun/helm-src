@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="100" viewBox="0 0 520 100">
+  <g>
+    <circle cx="50" cy="50" r="38" fill="none" stroke="#D4AF6A" stroke-width="3.8"/>
+    <circle cx="50" cy="12"  r="6.5" fill="#D4AF6A"/>
+    <circle cx="50" cy="88"  r="6.5" fill="#D4AF6A"/>
+    <circle cx="12" cy="50"  r="6.5" fill="#D4AF6A"/>
+    <circle cx="88" cy="50"  r="6.5" fill="#D4AF6A"/>
+    <circle cx="23.1" cy="23.1" r="5.5" fill="#D4AF6A"/>
+    <circle cx="76.9" cy="23.1" r="5.5" fill="#D4AF6A"/>
+    <circle cx="23.1" cy="76.9" r="5.5" fill="#D4AF6A"/>
+    <circle cx="76.9" cy="76.9" r="5.5" fill="#D4AF6A"/>
+    <line x1="50" y1="18.5" x2="50"   y2="81.5" stroke="#D4AF6A" stroke-width="3.2" stroke-linecap="round"/>
+    <line x1="18.5" y1="50" x2="81.5" y2="50"   stroke="#D4AF6A" stroke-width="3.2" stroke-linecap="round"/>
+    <line x1="28.6" y1="28.6" x2="71.4" y2="71.4" stroke="#D4AF6A" stroke-width="3.2" stroke-linecap="round"/>
+    <line x1="71.4" y1="28.6" x2="28.6" y2="71.4" stroke="#D4AF6A" stroke-width="3.2" stroke-linecap="round"/>
+    <circle cx="50" cy="50" r="9"   fill="transparent" stroke="#D4AF6A" stroke-width="3.2"/>
+    <circle cx="50" cy="50" r="3.5" fill="#D4AF6A"/>
+  </g>
+  <text
+    x="118"
+    y="68"
+    font-family="'Playfair Display', 'Georgia', serif"
+    font-size="64"
+    font-weight="700"
+    letter-spacing="3"
+    fill="#D4AF6A"
+  >Helm</text>
+</svg>
