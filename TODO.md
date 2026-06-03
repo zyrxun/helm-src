@@ -11,13 +11,13 @@
 
 - [x] First-run / empty-state onboarding — when `workflows.json` is missing or empty, show a "Create your first workflow →" prompt instead of a blank popover
 - [x] Tray icon Retina — provide `menubar-icon@2x.png` (36×36) alongside the 18×18; set `setTemplateImage(true)` correctly so it's crisp on Retina displays
-- [ ] Privacy policy — required before Stripe goes live and for GDPR/CalOPPA compliance (email collected at checkout)
+- [x] Privacy policy — required before Stripe goes live and for GDPR/CalOPPA compliance (email collected at checkout)
 - [x] Clean up `helm-src` git history — remove committed `.DS_Store` and `Icons and design/*.zip` blobs (`git rm --cached`, add to `.gitignore`, recommit)
 
 ## Needs setup (external services)
 
 - [x] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
-- [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
+- [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
 - [ ] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
 - [x] Bundle fonts locally — replace Google Fonts CDN link in `public/index.html` with self-hosted Inter / JetBrains Mono / Playfair Display
 
@@ -33,6 +33,11 @@
 - [ ] Host appcast: tag releases as `v1.x.x`, attach signed DMG as artifact — Sparkle fetches from GitHub Releases automatically
 - [ ] Requires signed + notarized build — Apple Developer enrollment above must be done first
 
+## App size & security
+
+- [ ] Size optimization — app is currently 1.48 GB; investigate electron-builder ASAR compression, stripping unused locales (`--` extraResources), pruning devDependencies from bundle, and switching to a smaller Electron base. Target: under 200 MB.
+- [ ] Security audit — review HELM_LICENSE_SECRET exposure in packaged binary (currently readable via strings on the DMG); consider moving all HMAC validation server-side only and removing local secret from the build.
+
 ## Future features
 
 - [ ] Per-URL window placement in workflow config — let users tag tabs as `{ window: "new" }` or group multiple URLs into a named window so a workflow can split contexts (e.g. Mail in its own window, the 5 Linear tabs grouped, Slack in a third). Default stays as "all tabs in front window" (current behavior).
@@ -43,15 +48,15 @@
 
 ## Domain & email (get-helm.app)
 
-- [ ] Cloudflare Pages — push landing page HTML to GitHub repo, connect get-helm.app as custom domain
-- [ ] Email forwarding — set up hello@get-helm.app → personal Gmail in Cloudflare (free, 5 min)
-- [ ] Resend domain verification — verify get-helm.app in Resend so license keys send from noreply@get-helm.app
+- [x] Cloudflare Pages — push landing page HTML to GitHub repo, connect get-helm.app as custom domain
+- [x] Email forwarding — set up hello@get-helm.app → personal Gmail in Cloudflare (free, 5 min)
+- [x] Resend domain verification — verify get-helm.app in Resend so license keys send from noreply@get-helm.app
 
 ## Before public launch (needs external accounts)
 
 - [x] Stripe test mode — payment link, webhook, Val.town handler all wired and tested
 - [ ] Stripe livemode — switch to live keys: new payment link, new webhook secret, update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town env vars
-- [ ] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
+- [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
 - [ ] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
-- [ ] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
+- [x] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
 - [x] Website / landing page — launch and prelaunch HTML ready
