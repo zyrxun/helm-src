@@ -59,17 +59,18 @@
 <body>
   <div id="root"></div>
 
-  <!-- Demo animation section -->
-  <div id="helm-demo-section">
-    <iframe id="helm-demo-frame" data-src="Helm Launch Video (standalone).html"></iframe>
+  <!-- Demo animation section — sticky so it pins while user scrolls through 200vh -->
+  <div style="height:200vh;position:relative;">
+    <div id="helm-demo-section" style="position:sticky;top:0;">
+      <iframe id="helm-demo-frame" data-src="Helm Launch Video (standalone).html"></iframe>
+    </div>
   </div>
 
   <!-- Live demo video -->
-  <div style="background:#0A1628;padding:0 0 88px;">
+  <div id="helm-video-wrap" style="background:#0A1628;padding:0 0 88px;">
     <video
       id="helm-demo-video"
       src="Helm_testrun.mp4"
-      autoplay
       loop
       muted
       playsinline
@@ -89,23 +90,17 @@
       const frame = document.getElementById('helm-demo-frame');
       if (!frame) return;
 
+      var frameLoaded = false;
       const observer = new IntersectionObserver(function(entries) {
         entries.forEach(function(entry) {
-          if (entry.isIntersecting) {
-            frame.classList.remove('visible');
-            frame.src = '';
-            // Wait for src reset to flush, then load fresh
-            setTimeout(function() {
-              frame.onload = function() {
-                // Give the animation a moment to render frame 0 before revealing
-                setTimeout(function() { frame.classList.add('visible'); }, 300);
-                frame.onload = null;
-              };
-              frame.src = frame.getAttribute('data-src');
-            }, 50);
-          } else {
-            frame.classList.remove('visible');
-            frame.src = '';
+          if (entry.isIntersecting && !frameLoaded) {
+            frameLoaded = true;
+            frame.onload = function() {
+              setTimeout(function() { frame.classList.add('visible'); }, 300);
+              frame.onload = null;
+            };
+            frame.src = frame.getAttribute('data-src');
+            observer.disconnect();
           }
         });
       }, { threshold: 0.2 });
@@ -124,6 +119,19 @@
       }
       window.addEventListener('scroll', onScroll, { passive: true });
     })();
+
+    // Play MP4 only when visible
+    (function() {
+      const video = document.getElementById('helm-demo-video');
+      if (!video) return;
+      const io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+          if (entry.isIntersecting) { video.play(); } else { video.pause(); }
+        });
+      }, { threshold: 0.3 });
+      io.observe(video);
+    })();
+
   </script>
 </body>
 </html>
