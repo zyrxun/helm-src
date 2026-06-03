@@ -432,6 +432,8 @@ function Footer() {
         <span>~/Library/Application Support/Helm</span>
         <span>v0.4.2</span>
         <span>Built for macOS</span>
+        <a href="/privacy.html" style={{ color: "#5a7290", textDecoration: "none", fontSize: 11 }}>Privacy</a>
+        <a href="/terms.html" style={{ color: "#5a7290", textDecoration: "none", fontSize: 11 }}>Terms</a>
       </div>
       <div className="footer-right">
         <HelmWheel size={18} spin="slow" />

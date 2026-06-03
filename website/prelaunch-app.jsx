@@ -449,6 +449,12 @@ function PrelaunchPage() {
             textDecoration: "none",
             letterSpacing: "0.04em",
           }}>Privacy</a>
+          <a href="/terms.html" style={{
+            fontSize: 11,
+            color: "#3a5068",
+            textDecoration: "none",
+            letterSpacing: "0.04em",
+          }}>Terms</a>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <HelmWheel size={16} spin="slow" />
