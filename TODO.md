@@ -35,6 +35,8 @@
 
 ## Future features
 
+- [ ] Per-URL window placement in workflow config — let users tag tabs as `{ window: "new" }` or group multiple URLs into a named window so a workflow can split contexts (e.g. Mail in its own window, the 5 Linear tabs grouped, Slack in a third). Default stays as "all tabs in front window" (current behavior).
+- [ ] Hide Stage debug/console + timestamp UI in the prelaunch launch-video iframe — currently visible to users despite the iframe being pointer-events:none. Either strip the controls from `Helm Launch Video (standalone).html` Stage component or overlay-mask them on the iframe side.
 - [ ] Spotify Web API integration — OAuth login to browse + save specific playlists (not just current track); requires Spotify Developer app + token refresh flow
 - [ ] Per-app refresh in workflow edit view — "re-capture this app" button on individual rows so e.g. Spotify track can be updated without rebuilding the whole workflow
 - [ ] Shareable workflow cards (v1.1 growth feature) — on workflow save, offer to generate a shareable PNG card showing the stack (workflow name + app list + Helm branding); Canvas API client-side, no backend needed. Buttons: Copy image, Copy tweet. Follow-up v1.2: shareable get-helm.app/stack#[base64] URL with Open Graph preview for Twitter/iMessage link previews. Ship 2–3 weeks post-launch once users are attached to the product.
