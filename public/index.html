@@ -896,6 +896,7 @@
       <div class="settings-row">
         <span class="settings-key">Status</span>
         <span id="s-status" class="settings-val"></span>
+        <button id="s-upgrade-btn" onclick="closeSettings(); showUpgrade(null);" style="display:none;font-family:var(--font-ui);font-size:11px;font-weight:600;color:var(--helm-abyss);background:var(--helm-gold);border:none;border-radius:5px;padding:3px 9px;cursor:pointer;letter-spacing:0.01em;">Upgrade</button>
       </div>
       <div class="settings-row" id="s-email-row">
         <span class="settings-key">Account</span>
@@ -1398,6 +1399,32 @@
   let capturedApps = [];
   let currentFocusMode = null;
   let captureGen = 0; // incremented on each capture; stale results are discarded
+  let capturePoller = null;
+
+  function startCapturePoller() {
+    stopCapturePoller();
+    capturePoller = setInterval(async () => {
+      if (document.getElementById('view-capture').classList.contains('active')) {
+        try {
+          const live = await window.api.captureState();
+          if (!live?.ok) return;
+          const knownKeys = new Set(capturedApps.map(appItemKey));
+          const newApps = (live.apps || []).filter(a => !knownKeys.has(appItemKey(a)));
+          if (newApps.length > 0) {
+            newApps.forEach(a => {
+              capturedApps.push(a);
+              appModes.set(capturedApps.length - 1, 'open');
+            });
+            renderPreview();
+          }
+        } catch(e) {}
+      }
+    }, 4000);
+  }
+
+  function stopCapturePoller() {
+    if (capturePoller) { clearInterval(capturePoller); capturePoller = null; }
+  }
 
   async function startCapture() {
     const count = document.querySelectorAll('.workflow-row').length;
@@ -1406,6 +1433,7 @@
       return;
     }
     showView('view-capture');
+    startCapturePoller();
 
     // Fast-spinning wheel while scanning
     const titleEl = document.getElementById('capture-title-text');
@@ -1825,6 +1853,8 @@
 
   function cancelCapture() {
     captureGen++; // invalidate any in-flight captureState promise
+    stopCapturePoller();
+    stopCapturePoller();
     capturedApps = [];
     appModes = new Map();
     editingWorkflowId = null;
@@ -1869,6 +1899,7 @@
     } catch(e) {}
 
     showView('view-capture');
+    startCapturePoller();
 
     // Slow wheel in header
     const titleEl = document.getElementById('capture-title-text');
@@ -2123,6 +2154,7 @@
     const el = id => document.getElementById(id);
     el('s-status').textContent = status.isPro ? 'Helm Pro' : 'Free plan';
     el('s-status').style.color = status.isPro ? 'var(--helm-gold)' : 'var(--helm-fog)';
+    el('s-upgrade-btn').style.display = status.isPro ? 'none' : 'inline-block';
 
     el('s-email-row').style.display        = status.isPro && status.email ? 'flex' : 'none';
     el('s-email').textContent              = status.email ?? '';
