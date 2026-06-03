@@ -119,84 +119,88 @@ function Hero({ headline, sub, demoStage }) {
 /* ============================================================
    Anatomy — How it works (3 numbered steps)
    ============================================================ */
+const HOW_IT_WORKS_STEPS = [
+  { id: "01", title: "Configure once",   body: "Define a workflow. Apps, tabs, files, focus mode. Plain JSON." },
+  { id: "02", title: "Click the wheel",  body: "Helm sits in your menu bar. One click reveals your workflows." },
+  { id: "03", title: "Your stack opens", body: "Apps launch. Tabs load. Files open. State preserved." },
+  { id: "04", title: "Take the wheel",   body: "Switch contexts in seconds. No Dock dance. No tab graveyard." },
+];
+
 function Anatomy() {
   return (
     <section className="container section" id="anatomy">
       <Reveal>
         <div className="section-head">
-          <div />
-          <h2 className="section-title">Three steps. No more, no less.</h2>
+          <div className="section-label" style={{ marginBottom: 12 }}>
+            How it works
+          </div>
+          <h2 className="section-title">
+            Four steps. One <span style={{ color: "var(--helm-gold)" }}>click.</span>
+          </h2>
         </div>
       </Reveal>
 
-      <div className="steps">
-          {[0, 1, 2].map((i) => (
-            <Reveal key={i} delay={i * 100} className="step-reveal">
-              {i === 0 && (
-                <div className="step">
-                  <h3 className="step-title">Define a workflow.</h3>
-                  <p className="step-body">
-                    Name a stack. Add apps, browser tabs, files, and a focus mode. Configure once.
-                  </p>
-                  <div className="step-visual">
-                    <pre className="config-snippet" style={{ margin: 0 }}>
-{`{`}
-{`  `}<span className="k">"name"</span><span className="pun">: </span><span className="s">"Mornings"</span><span className="pun">,</span>
-{`  `}<span className="k">"hotkey"</span><span className="pun">: </span><span className="s">"⌃⌥1"</span><span className="pun">,</span>
-{`  `}<span className="k">"apps"</span><span className="pun">: </span>[<span className="s">"Mail"</span><span className="pun">, </span><span className="s">"Notion"</span>]<span className="pun">,</span>
-{`  `}<span className="k">"tabs"</span><span className="pun">: </span>[<span className="s">"linear.app"</span>]
-{`}`}
-                    </pre>
-                  </div>
-                </div>
-              )}
-              {i === 1 && (
-                <div className="step">
-                  <h3 className="step-title">Click once.</h3>
-                  <p className="step-body">
-                    Open Helm from the menu bar. Pick a workflow, or press the hotkey from anywhere.
-                  </p>
-                  <div className="step-visual">
-                    <div className="step-click">
-                      <div className="step-click-cursor"><Glyph name="cursor" size={14} /></div>
-                      <div className="step-click-target">
-                        <HelmWheel size={16} spin="slow" />
-                        <span className="label">Mornings</span>
-                        <span className="hot">⌃⌥1</span>
-                      </div>
-                    </div>
-                    <p style={{ margin: "16px 0 0", fontSize: 12, color: "#5a7290", fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>
-                      {`> launch.workflow("Mornings")`}
-                    </p>
-                  </div>
-                </div>
-              )}
-              {i === 2 && (
-                <div className="step">
-                  <h3 className="step-title">Your stack is ready.</h3>
-                  <p className="step-body">
-                    Apps open in order. Tabs load. Window state restores. Focus mode engages. You start.
-                  </p>
-                  <div className="step-visual">
-                    <div className="step-apps">
-                      <span className="step-app lit">M</span>
-                      <span className="step-app lit">N</span>
-                      <span className="step-app lit">L</span>
-                      <span className="step-app lit">S</span>
-                      <span className="step-app">·</span>
-                      <span className="step-app">·</span>
-                    </div>
-                    <p style={{ margin: "16px 0 0", fontSize: 12, color: "var(--helm-green)", fontFamily: "var(--font-mono)", letterSpacing: "0.04em" }}>
-                      4 apps · 2 tabs · 1 file · ready in 1.2s
-                    </p>
-                  </div>
-                </div>
-              )}
-            </Reveal>
-          ))}
-        </div>
-    </section>);
-
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: 20,
+      }}>
+        {HOW_IT_WORKS_STEPS.map((step, i) => (
+          <Reveal key={step.id} delay={i * 100}>
+            <div style={{
+              background: "var(--helm-navy)",
+              border: "0.5px solid rgba(247,244,239,0.06)",
+              borderRadius: "var(--r-card)",
+              padding: "20px 20px 22px",
+              display: "flex",
+              flexDirection: "column",
+              boxSizing: "border-box",
+              height: "100%",
+            }}>
+              <div style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 28,
+                fontWeight: 500,
+                color: "var(--helm-gold)",
+                letterSpacing: "0.04em",
+                lineHeight: 1,
+              }}>
+                {step.id}
+              </div>
+              <div style={{
+                width: 28,
+                height: "0.5px",
+                background: "rgba(247,244,239,0.06)",
+                marginTop: 12,
+                marginBottom: 12,
+              }} />
+              <h3 style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--helm-chalk)",
+                letterSpacing: "-0.01em",
+                lineHeight: 1.2,
+                margin: "0 0 8px",
+              }}>
+                {step.title}
+              </h3>
+              <p style={{
+                fontFamily: "var(--font-ui)",
+                fontSize: 13,
+                fontWeight: 400,
+                color: "var(--helm-fog)",
+                lineHeight: 1.65,
+                margin: 0,
+              }}>
+                {step.body}
+              </p>
+            </div>
+          </Reveal>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 /* ============================================================

@@ -171,6 +171,109 @@ const TEASERS = [
 ];
 
 /* ============================================================
+   How it works
+   ============================================================ */
+const STEPS = [
+  { id: "01", title: "Configure once",   body: "Define a workflow. Apps, tabs, files, focus mode. Plain JSON." },
+  { id: "02", title: "Click the wheel",  body: "Helm sits in your menu bar. One click reveals your workflows." },
+  { id: "03", title: "Your stack opens", body: "Apps launch. Tabs load. Files open. State preserved." },
+  { id: "04", title: "Take the wheel",   body: "Switch contexts in seconds. No Dock dance. No tab graveyard." },
+];
+
+function HowItWorks() {
+  return (
+    <section style={{
+      maxWidth: 960,
+      margin: "0 auto",
+      padding: "0 56px 88px",
+      width: "100%",
+      boxSizing: "border-box",
+    }}>
+      <div style={{
+        fontFamily: "var(--font-ui)",
+        fontSize: 10,
+        fontWeight: 600,
+        color: "#5a7290",
+        letterSpacing: "0.14em",
+        textTransform: "uppercase",
+        marginBottom: 12,
+      }}>
+        How it works
+      </div>
+
+      <h2 style={{
+        fontFamily: "var(--font-display)",
+        fontWeight: 700,
+        fontSize: "clamp(36px, 5vw, 56px)",
+        color: "var(--helm-chalk)",
+        lineHeight: 1.15,
+        letterSpacing: "-0.02em",
+        margin: "0 0 48px",
+      }}>
+        Four steps. One <span style={{ color: "var(--helm-gold)" }}>click.</span>
+      </h2>
+
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(4, 1fr)",
+        gap: 20,
+      }}>
+        {STEPS.map((step) => (
+          <div key={step.id} style={{
+            background: "var(--helm-navy)",
+            border: "0.5px solid rgba(247,244,239,0.06)",
+            borderRadius: "var(--r-card)",
+            padding: "20px 20px 22px",
+            display: "flex",
+            flexDirection: "column",
+            boxSizing: "border-box",
+          }}>
+            <div style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: 28,
+              fontWeight: 500,
+              color: "var(--helm-gold)",
+              letterSpacing: "0.04em",
+              lineHeight: 1,
+            }}>
+              {step.id}
+            </div>
+            <div style={{
+              width: 28,
+              height: "0.5px",
+              background: "rgba(247,244,239,0.06)",
+              marginTop: 12,
+              marginBottom: 12,
+            }} />
+            <h3 style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 14,
+              fontWeight: 600,
+              color: "var(--helm-chalk)",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.2,
+              margin: "0 0 8px",
+            }}>
+              {step.title}
+            </h3>
+            <p style={{
+              fontFamily: "var(--font-ui)",
+              fontSize: 13,
+              fontWeight: 400,
+              color: "var(--helm-fog)",
+              lineHeight: 1.65,
+              margin: 0,
+            }}>
+              {step.body}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ============================================================
    Scroll prompt
    ============================================================ */
 function ScrollPrompt() {
@@ -320,6 +423,8 @@ function PrelaunchPage() {
           </div>
         ))}
       </section>
+
+      <HowItWorks />
 
       {/* ── Footer ── */}
       <footer style={{
