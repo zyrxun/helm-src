@@ -9,6 +9,7 @@ public/brand/dmg-background.png
 *.zip
 *.mov
 *.mp4
+!website/*.mp4
 HELM_LAUNCH_VIDEO.mov
 
 .projects/cache
