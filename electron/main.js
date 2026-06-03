@@ -242,7 +242,7 @@ app.whenReady().then(async () => {
   if (!fs.existsSync(welcomedPath)) {
     fs.writeFileSync(welcomedPath, '1');
     const welcome = new BrowserWindow({
-      width: 400, height: 680,
+      width: 480, height: 680,
       resizable: true, minimizable: false, maximizable: false,
       titleBarStyle: 'hiddenInset',
       backgroundColor: '#0A1628',
