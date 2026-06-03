@@ -51,14 +51,23 @@ function run(argv) {
     return "Not running";
   }
 
-  // VS Code: save before quit
-  if (appName === "Code" || appName === "Visual Studio Code") {
+  // Apps that need Cmd+S before quit to avoid losing unsaved work
+  var saveBeforeQuit = [
+    "Code", "Visual Studio Code",           // VS Code
+    "Microsoft Word", "Microsoft Excel", "Microsoft PowerPoint",  // Office
+    "Pages", "Numbers", "Keynote",          // iWork
+    "Notion",                               // Notion desktop
+    "Obsidian",                             // Obsidian
+    "BBEdit", "TextEdit", "Sublime Text",   // Text editors
+  ];
+
+  if (saveBeforeQuit.indexOf(appName) !== -1) {
     try {
       targetApp.activate();
-      delay(0.2);
+      delay(0.3);
       var se = Application("System Events");
       se.keystroke("s", { using: ["command down"] });
-      delay(0.1);
+      delay(0.3);
     } catch (e) {}
   }
 
