@@ -329,14 +329,22 @@ function PrelaunchPage() {
         alignItems: "center",
         justifyContent: "space-between",
       }}>
-        <span style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: 11,
-          color: "#3a5068",
-          letterSpacing: "0.04em",
-        }}>
-          ~/Library/Application Support/Helm
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <span style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: 11,
+            color: "#3a5068",
+            letterSpacing: "0.04em",
+          }}>
+            ~/Library/Application Support/Helm
+          </span>
+          <a href="/privacy.html" style={{
+            fontSize: 11,
+            color: "#3a5068",
+            textDecoration: "none",
+            letterSpacing: "0.04em",
+          }}>Privacy</a>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <HelmWheel size={16} spin="slow" />
           <span style={{
