@@ -15,6 +15,10 @@
   "build": {
     "appId": "com.helm.app",
     "productName": "Helm",
+    "publish": {
+      "provider": "generic",
+      "url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev"
+    },
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "public/brand/icon.icns",
@@ -79,6 +83,7 @@
   },
   "dependencies": {
     "@sentry/electron": "^7.13.0",
-    "dotenv": "^16.0.0"
+    "dotenv": "^16.0.0",
+    "electron-updater": "^6.8.3"
   }
 }

@@ -18,7 +18,7 @@
 
 - [x] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
 - [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
-- [ ] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
+- [x] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
 - [x] Bundle fonts locally — replace Google Fonts CDN link in `public/index.html` with self-hosted Inter / JetBrains Mono / Playfair Display
 
 ## Beta distribution
@@ -27,11 +27,16 @@
 - [x] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
 - [x] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
 
-## Auto-update (Sparkle)
+## Auto-update (electron-updater → Cloudflare R2)
 
-- [ ] Wire `update-electron-app` with GitHub releases appcast (version check on launch, in-app banner)
-- [ ] Host appcast: tag releases as `v1.x.x`, attach signed DMG as artifact — Sparkle fetches from GitHub Releases automatically
-- [ ] Requires signed + notarized build — Apple Developer enrollment above must be done first
+- [x] Wire `electron-updater` in `main.js` pointing at R2 bucket `helm-updates`
+- [x] Add `publish` config to `package.json` so `npm run pack` generates `latest-mac.yml`
+- [x] Write `scripts/upload-release.sh` to push release files to R2
+- [ ] **To ship a new release:**
+  1. Bump version in `package.json` (e.g. `1.0.0` → `1.0.1`)
+  2. Build + sign + notarize: `export $(cat .env | grep -v '#' | xargs) && npm run pack`
+  3. Upload to R2: `bash scripts/upload-release.sh`
+  4. Users will be notified in-app automatically on next launch
 
 ## App size & security
 
@@ -57,6 +62,6 @@
 - [x] Stripe test mode — payment link, webhook, Val.town handler all wired and tested
 - [ ] Stripe livemode — switch to live keys: new payment link, new webhook secret, update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town env vars
 - [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
-- [ ] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
+- [x] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [x] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
 - [x] Website / landing page — launch and prelaunch HTML ready

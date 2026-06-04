@@ -1,6 +1,7 @@
 require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
 
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, autoUpdater, systemPreferences, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, systemPreferences, globalShortcut } = require('electron');
+const { autoUpdater } = require('electron-updater');
 
 const Sentry = require('@sentry/electron/main');
 if (process.env.SENTRY_DSN) {
@@ -256,21 +257,26 @@ app.whenReady().then(async () => {
   }
 
   if (app.isPackaged) {
-    const feedUrl = `https://update.electronjs.org/zyrxun/helm-releases/darwin-${process.arch}/${app.getVersion()}`;
-    try {
-      autoUpdater.setFeedURL({ url: feedUrl });
-      autoUpdater.checkForUpdates();
-    } catch (err) {
-      console.error('Auto-updater error:', err);
-    }
-    autoUpdater.on('update-downloaded', (_, releaseNotes, releaseName) => {
+    autoUpdater.setFeedURL({
+      provider: 'generic',
+      url: 'https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev',
+    });
+    autoUpdater.autoDownload = true;
+    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.on('update-available', (info) => {
       if (win && !win.webContents.isDestroyed()) {
-        win.webContents.send('update-downloaded', { releaseName });
+        win.webContents.send('update-available', { version: info.version });
+      }
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      if (win && !win.webContents.isDestroyed()) {
+        win.webContents.send('update-downloaded', { releaseName: info.version });
       }
     });
     autoUpdater.on('error', (err) => {
       console.error('Auto-updater error:', err);
     });
+    autoUpdater.checkForUpdates().catch(err => console.error('Update check failed:', err));
   }
 });
 
