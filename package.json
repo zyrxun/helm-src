@@ -19,6 +19,25 @@
       "provider": "generic",
       "url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev"
     },
+    "asar": true,
+    "compression": "maximum",
+    "files": [
+      "electron/**/*",
+      "public/**/*",
+      "package.json",
+      ".env",
+      "!public/**/*.mov",
+      "!public/**/*.mp4",
+      "!**/*.map",
+      "!**/*.ts",
+      "!**/*.md",
+      "!**/.DS_Store",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,readme.md,README,readme,HISTORY.md,*.markdown}",
+      "!**/node_modules/*/{test,tests,__tests__,powered-test,example,examples,docs,doc,.github}",
+      "!**/node_modules/*.d.ts",
+      "!**/node_modules/.bin",
+      "!**/node_modules/**/{*.cc,*.h,*.gyp,*.gypi,binding.gyp,Makefile,*.mk}"
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "public/brand/icon.icns",
