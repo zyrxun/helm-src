@@ -10,7 +10,7 @@ function run() {
 
   var browserNames = ["Google Chrome", "Safari", "Arc", "Firefox"];
   var skip = [
-    "Finder", "Dock", "SystemUIServer", "Control Center",
+    "Dock", "SystemUIServer", "Control Center",
     "WindowServer", "loginwindow", "NotificationCenter", "Spotlight",
     "Alfred", "Raycast", "Activity Monitor"
   ];
@@ -230,6 +230,29 @@ function run() {
     if (name === "Code") {
       // Open files are enriched by main.js via vscode_state.py after capture returns
       result.apps.push({ name: "Code" });
+      return;
+    }
+
+    if (name === "Finder") {
+      try {
+        var finder = Application("Finder");
+        var wins = finder.windows();
+        var pushed = false;
+        for (var fi = 0; fi < wins.length; fi++) {
+          try {
+            var target = wins[fi].target();
+            var url = target.url();
+            if (!url || url.indexOf("file://") !== 0) continue;
+            var folderPath = decodeURIComponent(url.replace(/^file:\/\//, "")).replace(/\/$/, "");
+            if (!folderPath) continue;
+            result.apps.push({ name: "Finder", folderPath: folderPath });
+            pushed = true;
+          } catch(e) {}
+        }
+        if (!pushed) result.apps.push({ name: "Finder" });
+      } catch(e) {
+        result.apps.push({ name: "Finder" });
+      }
       return;
     }
 

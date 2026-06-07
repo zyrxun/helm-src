@@ -2,6 +2,23 @@ function run(argv) {
   var appName = argv[0];
   var urlArg  = argv[1] || null;
 
+  if (appName === "Finder") {
+    var finder = Application("Finder");
+    finder.activate();
+    var folderArg = (urlArg && urlArg.indexOf("/") === 0) ? urlArg : null;
+    if (folderArg) {
+      var sysApp = Application.currentApplication();
+      sysApp.includeStandardAdditions = true;
+      var safeF = folderArg.replace(/'/g, "'\\''");
+      try {
+        sysApp.doShellScript("open '" + safeF + "'");
+      } catch(e) {
+        try { finder.open(Path(folderArg)); } catch(e2) {}
+      }
+    }
+    return "Processed Finder";
+  }
+
   if (appName === "Terminal" && urlArg && !urlArg.match(/^https?:\/\//i)) {
     try {
       var terminalApp = Application("Terminal");

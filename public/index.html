@@ -1631,6 +1631,8 @@
           }
         } else if (a.name === 'Terminal' && a.folderPath) {
           urlSpan.textContent = '📂 ' + (a.folderPath.split('/').pop() || a.folderPath);
+        } else if (a.name === 'Finder' && a.folderPath) {
+          urlSpan.textContent = '🗂️ ' + (a.folderPath.split('/').pop() || a.folderPath);
         } else if (a.name === 'Spotify') {
           urlSpan.textContent = a.label ? '🎵 ' + a.label : '🎵 Spotify';
         } else if (a.name === 'Slack') {
