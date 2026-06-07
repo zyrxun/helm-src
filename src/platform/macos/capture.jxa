@@ -10,7 +10,7 @@ function run() {
 
   var browserNames = ["Google Chrome", "Safari", "Arc", "Firefox"];
   var skip = [
-    "Dock", "SystemUIServer", "Control Center",
+    "Finder", "Dock", "SystemUIServer", "Control Center",
     "WindowServer", "loginwindow", "NotificationCenter", "Spotlight",
     "Alfred", "Raycast", "Activity Monitor"
   ];
@@ -233,29 +233,6 @@ function run() {
       return;
     }
 
-    if (name === "Finder") {
-      try {
-        var finder = Application("Finder");
-        var wins = finder.windows();
-        var pushed = false;
-        for (var fi = 0; fi < wins.length; fi++) {
-          try {
-            var target = wins[fi].target();
-            var url = target.url();
-            if (!url || url.indexOf("file://") !== 0) continue;
-            var folderPath = decodeURIComponent(url.replace(/^file:\/\//, "")).replace(/\/$/, "");
-            if (!folderPath) continue;
-            result.apps.push({ name: "Finder", folderPath: folderPath });
-            pushed = true;
-          } catch(e) {}
-        }
-        if (!pushed) result.apps.push({ name: "Finder" });
-      } catch(e) {
-        result.apps.push({ name: "Finder" });
-      }
-      return;
-    }
-
     if (browserNames.indexOf(name) !== -1) {
       try {
         var browser = Application(name);
@@ -287,6 +264,45 @@ function run() {
       result.apps.push({ name: name });
     }
   });
+
+  // Finder probe — runs unconditionally so Finder always appears in the
+  // workflow editor, even when System Events reports `visible: false`
+  // (e.g. Finder hidden via Cmd+H, no open windows, or Spaces desync).
+  try {
+    var finder = Application("Finder");
+    var finderWins = finder.windows();
+    var finderPushed = 0;
+    for (var fwi = 0; fwi < finderWins.length; fwi++) {
+      var winName = null;
+      try { winName = String(finderWins[fwi].name() || ""); } catch(e) {}
+      try {
+        var ftarget = finderWins[fwi].target();
+        var furl = ftarget.url();
+        if (furl && furl.indexOf("file://") === 0) {
+          var folderPath = decodeURIComponent(furl.replace(/^file:\/\//, "")).replace(/\/$/, "");
+          if (folderPath) {
+            result.apps.push({ name: "Finder", folderPath: folderPath });
+            finderPushed++;
+            continue;
+          }
+        }
+        // Window has no file:// target — Recents, AirDrop, iCloud, search, etc.
+        if (winName) {
+          result.apps.push({ name: "Finder", label: winName });
+          finderPushed++;
+        }
+      } catch(e) {
+        // target() threw — still surface the window with its name if we have one
+        if (winName) {
+          result.apps.push({ name: "Finder", label: winName });
+          finderPushed++;
+        }
+      }
+    }
+    if (finderPushed === 0) result.apps.push({ name: "Finder" });
+  } catch(e) {
+    result.apps.push({ name: "Finder" });
+  }
 
   return JSON.stringify(result);
 }
