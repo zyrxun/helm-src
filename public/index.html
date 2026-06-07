@@ -1731,13 +1731,33 @@
           btn.type = 'button';
           btn.className = 'chrome-profile-btn';
           btn.title = 'Chrome profile';
-          btn.style.cssText = 'margin-left:auto;border:none;background:transparent;color:var(--helm-fog);cursor:pointer;font-size:12px;line-height:1;padding:2px 6px;border-radius:3px;display:flex;align-items:center;gap:4px;';
+          btn.style.cssText = 'margin-left:auto;border:0.5px solid rgba(247,244,239,0.08);background:rgba(247,244,239,0.02);'
+            + 'color:var(--helm-fog);cursor:pointer;line-height:1;padding:3px 8px 3px 6px;border-radius:10px;'
+            + 'display:inline-flex;align-items:center;gap:5px;transition:all 0.15s ease;font-family:Inter,sans-serif;';
+          btn.addEventListener('mouseenter', () => {
+            btn.style.background = chromeApp.profile ? 'rgba(212,175,106,0.08)' : 'rgba(247,244,239,0.06)';
+            btn.style.borderColor = chromeApp.profile ? 'rgba(212,175,106,0.3)' : 'rgba(247,244,239,0.15)';
+          });
+          btn.addEventListener('mouseleave', () => {
+            btn.style.background = chromeApp.profile ? 'rgba(212,175,106,0.04)' : 'rgba(247,244,239,0.02)';
+            btn.style.borderColor = chromeApp.profile ? 'rgba(212,175,106,0.2)' : 'rgba(247,244,239,0.08)';
+          });
           function renderBtnLabel() {
             getChromeProfiles().then(profiles => {
               const match = (profiles || []).find(p => p.dir === chromeApp.profile);
               const lbl = match ? match.name : (chromeApp.profile ? chromeApp.profile : '');
-              btn.innerHTML = '<span style="font-size:11px;">👤</span>'
-                + (lbl ? '<span style="font-size:10px;color:var(--helm-gold);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + lbl.replace(/[<>&]/g, '') + '</span>' : '');
+              const active = !!chromeApp.profile;
+              btn.style.background = active ? 'rgba(212,175,106,0.04)' : 'rgba(247,244,239,0.02)';
+              btn.style.borderColor = active ? 'rgba(212,175,106,0.2)' : 'rgba(247,244,239,0.08)';
+              // Refined SVG glyph: minimal avatar mark
+              const iconColor = active ? 'var(--helm-gold)' : 'var(--helm-fog)';
+              btn.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="flex-shrink:0;">'
+                + '<circle cx="5" cy="3.2" r="1.6" stroke="' + iconColor + '" stroke-width="0.8"/>'
+                + '<path d="M1.6 8.4c0-1.4 1.5-2.4 3.4-2.4s3.4 1 3.4 2.4" stroke="' + iconColor + '" stroke-width="0.8" stroke-linecap="round"/>'
+                + '</svg>'
+                + (lbl
+                    ? '<span style="font-size:10px;font-weight:500;color:var(--helm-gold);letter-spacing:0.2px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + lbl.replace(/[<>&]/g, '') + '</span>'
+                    : '<span style="font-size:9px;color:var(--helm-fog);letter-spacing:0.4px;text-transform:uppercase;opacity:0.7;">Profile</span>');
             });
           }
           renderBtnLabel();
@@ -1745,41 +1765,109 @@
           btn.addEventListener('mousedown', blockBtn);
           btn.addEventListener('click', (ev) => {
             ev.stopPropagation();
-            // Close any existing popup
             document.querySelectorAll('.chrome-profile-popup').forEach(el => el.remove());
             const pop = document.createElement('div');
             pop.className = 'chrome-profile-popup';
             const rect = btn.getBoundingClientRect();
-            pop.style.cssText = 'position:fixed;top:' + (rect.bottom + 4) + 'px;right:' + (window.innerWidth - rect.right) + 'px;'
-              + 'background:var(--helm-navy);border:0.5px solid rgba(247,244,239,0.15);border-radius:6px;'
-              + 'padding:4px 0;min-width:180px;max-height:280px;overflow-y:auto;z-index:9999;'
-              + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+            pop.style.cssText = 'position:fixed;top:' + (rect.bottom + 6) + 'px;right:' + (window.innerWidth - rect.right) + 'px;'
+              + 'background:rgba(10,22,40,0.92);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);'
+              + 'border:0.5px solid rgba(212,175,106,0.18);border-radius:8px;'
+              + 'padding:5px;min-width:220px;max-width:260px;max-height:300px;overflow-y:auto;z-index:9999;'
+              + 'box-shadow:0 8px 32px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(247,244,239,0.04) inset;'
+              + 'font-family:Inter,sans-serif;opacity:0;transform:translateY(-4px);transition:opacity 0.12s ease, transform 0.12s ease;';
             pop.addEventListener('mousedown', e => e.stopPropagation());
             pop.addEventListener('click', e => e.stopPropagation());
-            function makeOpt(label, value) {
+
+            // Header
+            const hdr = document.createElement('div');
+            hdr.style.cssText = 'padding:6px 10px 5px;font-size:9px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;'
+              + 'color:var(--helm-gold);opacity:0.65;border-bottom:0.5px solid rgba(247,244,239,0.06);margin-bottom:3px;';
+            hdr.textContent = 'Chrome Profile';
+            pop.appendChild(hdr);
+
+            // Search input
+            const search = document.createElement('input');
+            search.type = 'text';
+            search.placeholder = 'Filter…';
+            search.style.cssText = 'width:100%;box-sizing:border-box;background:rgba(247,244,239,0.04);border:0.5px solid rgba(247,244,239,0.08);'
+              + 'border-radius:5px;color:var(--helm-chalk);padding:5px 8px;font-size:11px;outline:none;margin:2px 0 5px;font-family:Inter,sans-serif;';
+            search.addEventListener('focus', () => { search.style.borderColor = 'rgba(212,175,106,0.3)'; });
+            search.addEventListener('blur',  () => { search.style.borderColor = 'rgba(247,244,239,0.08)'; });
+            const searchBlock = e => e.stopPropagation();
+            search.addEventListener('mousedown', searchBlock);
+            search.addEventListener('keydown', searchBlock);
+            pop.appendChild(search);
+
+            const listWrap = document.createElement('div');
+            pop.appendChild(listWrap);
+
+            function makeOpt(name, dir, value) {
               const r = document.createElement('div');
-              r.style.cssText = 'padding:6px 12px;font-size:11px;color:var(--helm-chalk);cursor:pointer;'
-                + (value === (chromeApp.profile || '') ? 'background:rgba(212,175,106,0.12);color:var(--helm-gold);' : '');
-              r.textContent = label;
-              r.addEventListener('mouseenter', () => { if (value !== (chromeApp.profile || '')) r.style.background = 'rgba(247,244,239,0.05)'; });
-              r.addEventListener('mouseleave', () => { if (value !== (chromeApp.profile || '')) r.style.background = ''; });
+              const isSel = value === (chromeApp.profile || '');
+              r.dataset.search = (name + ' ' + (dir || '')).toLowerCase();
+              r.style.cssText = 'padding:6px 10px;font-size:11px;cursor:pointer;border-radius:5px;margin:1px 0;'
+                + 'display:flex;align-items:center;justify-content:space-between;gap:8px;transition:background 0.1s ease;'
+                + (isSel ? 'background:rgba(212,175,106,0.1);color:var(--helm-gold);' : 'color:var(--helm-chalk);');
+
+              const left = document.createElement('span');
+              left.style.cssText = 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-weight:' + (isSel ? '500' : '400') + ';';
+              left.textContent = name;
+              r.appendChild(left);
+
+              if (dir) {
+                const right = document.createElement('span');
+                right.style.cssText = 'font-size:9px;color:var(--helm-fog);opacity:0.55;font-family:JetBrains Mono,monospace;letter-spacing:0.3px;flex-shrink:0;';
+                right.textContent = dir;
+                r.appendChild(right);
+              }
+
+              if (isSel) {
+                const tick = document.createElement('span');
+                tick.innerHTML = '<svg width="8" height="8" viewBox="0 0 10 10" fill="none"><polyline points="1.5,5 4,7.5 8.5,2.5" stroke="var(--helm-gold)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                tick.style.cssText = 'flex-shrink:0;display:flex;align-items:center;';
+                r.appendChild(tick);
+              }
+
+              r.addEventListener('mouseenter', () => { if (!isSel) r.style.background = 'rgba(247,244,239,0.05)'; });
+              r.addEventListener('mouseleave', () => { if (!isSel) r.style.background = ''; });
               r.addEventListener('click', () => {
                 if (value) chromeApp.profile = value; else delete chromeApp.profile;
                 renderBtnLabel();
-                pop.remove();
+                pop.style.opacity = '0';
+                pop.style.transform = 'translateY(-4px)';
+                setTimeout(() => pop.remove(), 100);
               });
               return r;
             }
-            pop.appendChild(makeOpt('(default — last active)', ''));
+
+            listWrap.appendChild(makeOpt('Default — last active', '', ''));
+
             getChromeProfiles().then(profiles => {
               (profiles || []).forEach(p => {
-                pop.appendChild(makeOpt(p.name + ' · ' + p.dir, p.dir));
+                listWrap.appendChild(makeOpt(p.name, p.dir, p.dir));
               });
             });
+
+            search.addEventListener('input', () => {
+              const q = search.value.trim().toLowerCase();
+              Array.from(listWrap.children).forEach(r => {
+                if (!q) { r.style.display = ''; return; }
+                r.style.display = r.dataset.search.includes(q) ? '' : 'none';
+              });
+            });
+
             document.body.appendChild(pop);
+            requestAnimationFrame(() => {
+              pop.style.opacity = '1';
+              pop.style.transform = 'translateY(0)';
+            });
+            setTimeout(() => search.focus(), 50);
+
             const dismiss = (e) => {
-              if (!pop.contains(e.target) && e.target !== btn) {
-                pop.remove();
+              if (!pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                pop.style.opacity = '0';
+                pop.style.transform = 'translateY(-4px)';
+                setTimeout(() => pop.remove(), 100);
                 document.removeEventListener('mousedown', dismiss, true);
               }
             };
