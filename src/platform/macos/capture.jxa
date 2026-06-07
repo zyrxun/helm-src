@@ -240,11 +240,15 @@ function run() {
           if (name !== "Firefox") {
             var wins = browser.windows();
 
-            // For Chrome: best-effort profile detection via window title suffix.
-            // Modern Chrome (M100+) shows the profile only in the toolbar avatar,
-            // not in the title bar, so this often returns no matches and tabs are
-            // emitted without a profile — the user picks one via the editor UI.
-            var winProfileMap = {};
+            // For Chrome: profile detection via System Events accessibility tree.
+            // Modern Chrome (M100+) doesn't include the profile name in window
+            // titles, but the toolbar avatar/profile button does expose the
+            // profile display name through AX description/title/help. Walk the
+            // tree to find it. Title-suffix fallback covers older Chrome.
+            //
+            // Window correlation: Chrome's bridge `win.name()` equals System
+            // Events' `win.title()` for the same window, so we key by title.
+            var winProfileMap = {}; // windowTitle -> profileDir
             if (name === "Google Chrome") {
               try {
                 var rawLS = app.doShellScript(
@@ -256,15 +260,57 @@ function run() {
                 Object.keys(cache).forEach(function(dir) {
                   profilesArr.push({ dir: dir, name: String((cache[dir] && cache[dir].name) || dir) });
                 });
+                // Longest names first so "Work Lab" beats "Work" on partial matches.
+                profilesArr.sort(function(a, b) { return b.name.length - a.name.length; });
+
                 if (profilesArr.length > 0) {
+                  // AX-tree walk via System Events
+                  var findProfileInElement = function(elem, depth) {
+                    if (depth > 8) return null;
+                    var hay = "";
+                    try { hay += String(elem.description() || ""); } catch(e) {}
+                    try { hay += " " + String(elem.title() || ""); } catch(e) {}
+                    try { hay += " " + String(elem.help() || ""); } catch(e) {}
+                    try { hay += " " + String(elem.value() || ""); } catch(e) {}
+                    if (hay) {
+                      for (var pi = 0; pi < profilesArr.length; pi++) {
+                        var nm = profilesArr[pi].name;
+                        if (!nm || nm.length < 2) continue;
+                        if (hay.indexOf(nm) !== -1) return profilesArr[pi].dir;
+                      }
+                    }
+                    try {
+                      var kids = elem.UIElements();
+                      for (var kk = 0; kk < kids.length; kk++) {
+                        var got = findProfileInElement(kids[kk], depth + 1);
+                        if (got) return got;
+                      }
+                    } catch(e) {}
+                    return null;
+                  };
+
+                  try {
+                    var chromeProc = se.processes.byName("Google Chrome");
+                    var seWins = chromeProc.windows();
+                    for (var swi = 0; swi < seWins.length; swi++) {
+                      try {
+                        var winTitle = String(seWins[swi].title() || seWins[swi].name() || "");
+                        if (!winTitle) continue;
+                        var dir = findProfileInElement(seWins[swi], 0);
+                        if (dir) winProfileMap[winTitle] = dir;
+                      } catch(e) {}
+                    }
+                  } catch(e) { /* AX query failed — fall back to title-suffix below */ }
+
+                  // Title-suffix fallback for older Chrome
                   for (var wi = 0; wi < wins.length; wi++) {
                     try {
-                      var title = String(wins[wi].name() || "");
-                      var wid = String(wins[wi].id());
+                      var titleB = String(wins[wi].name() || "");
+                      if (winProfileMap[titleB]) continue; // AX already matched
                       for (var pj = 0; pj < profilesArr.length; pj++) {
                         var esc = profilesArr[pj].name.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-                        if (new RegExp(" - " + esc + "$").test(title)) {
-                          winProfileMap[wid] = profilesArr[pj].dir;
+                        if (new RegExp(" - " + esc + "$").test(titleB)) {
+                          winProfileMap[titleB] = profilesArr[pj].dir;
                           break;
                         }
                       }
@@ -283,7 +329,7 @@ function run() {
                 if (urls && urls.length) {
                   var winProfile = null;
                   if (name === "Google Chrome") {
-                    try { winProfile = winProfileMap[String(win.id())] || null; } catch(e) {}
+                    try { winProfile = winProfileMap[String(win.name() || "")] || null; } catch(e) {}
                   }
                   for (var i = 0; i < urls.length; i++) {
                     var url = urls[i];
