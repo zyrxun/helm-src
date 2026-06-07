@@ -1,6 +1,7 @@
 function run(argv) {
   var appName = argv[0];
   var urlArg  = argv[1] || null;
+  var profileArg = argv[3] || null; // Chrome profile dir (e.g. "Default", "Profile 1")
 
   if (appName === "Finder") {
     var finder = Application("Finder");
@@ -176,6 +177,23 @@ function run(argv) {
   if (browsers.indexOf(appName) !== -1 && urlArg) {
     if (!wasRunning) delay(1.5); // cold boot: wait for window layer to appear
     else delay(0.5);
+
+    // Chrome + explicit profile: delegate to `open --profile-directory` so the
+    // URL lands in the right profile container. Chrome itself handles existing
+    // tab focusing within that profile, so we skip the JXA-bridge dedup loop
+    // (which can't tell which profile a window belongs to on modern Chrome).
+    if (appName === "Google Chrome" && profileArg && /^(Default|Profile [0-9]+)$/.test(profileArg)) {
+      var sysAppCh = Application.currentApplication();
+      sysAppCh.includeStandardAdditions = true;
+      var safeUrl = urlArg.replace(/'/g, "'\\''");
+      var safeProf = profileArg.replace(/'/g, "'\\''");
+      try {
+        sysAppCh.doShellScript(
+          "open -a 'Google Chrome' --args --profile-directory='" + safeProf + "' '" + safeUrl + "'"
+        );
+      } catch(e) {}
+      return "Processed Google Chrome (profile: " + profileArg + ")";
+    }
 
     if (app.windows.length === 0) app.Document().make();
 

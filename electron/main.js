@@ -313,6 +313,10 @@ function validateWorkflow(w) {
         !isSafeString(app.labelFallback, 256))   return false;
     if (app.filePath !== undefined &&
         !isSafeString(app.filePath, 512))        return false;
+    if (app.profile !== undefined && app.profile !== null && app.profile !== '' &&
+        !/^(Default|Profile [0-9]+)$/.test(app.profile)) return false;
+    if (app.label !== undefined &&
+        !isSafeString(app.label, 256))             return false;
   }
   if (w.focusMode !== undefined && !isSafeString(w.focusMode, 128)) return false;
   if (w.closeApps !== undefined) {
@@ -393,11 +397,20 @@ async function teardownWorkflowById(workflowId) {
   if (!workflow) return { ok: false, error: 'Workflow not found' };
   const targets = (workflow.apps || [])
     .filter(a => a && isSafeString(a.name, 128))
-    .map(a => ({ name: a.name.replace(/'/g, '') }));
+    .map(a => ({
+      name: a.name.replace(/'/g, ''),
+      urlToOpen: a.urlToOpen,
+      profile: a.profile,
+    }));
   await Promise.all(targets.map(a =>
     new Promise(resolve => {
       const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), a.name];
-      if (a.urlToOpen && isSafeUrl(a.urlToOpen)) closeArgs.push(a.urlToOpen);
+      if (a.urlToOpen && isSafeUrl(a.urlToOpen)) {
+        closeArgs.push(a.urlToOpen);
+        if (a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile)) {
+          closeArgs.push(a.profile);
+        }
+      }
       execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
     })
   ));
@@ -445,7 +458,12 @@ async function runWorkflowById(workflowId) {
       ? appTarget.folderPath
       : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
     const args = ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url];
-    if (appTarget.filePath && isSafeString(appTarget.filePath, 512)) args.push(appTarget.filePath);
+    const fp = (appTarget.filePath && isSafeString(appTarget.filePath, 512)) ? appTarget.filePath : '';
+    const profile = (appTarget.profile && /^(Default|Profile [0-9]+)$/.test(appTarget.profile))
+      ? appTarget.profile : '';
+    // Always push slot 3 so slot 4 (profile) stays positionally stable.
+    if (fp || profile) args.push(fp);
+    if (profile) args.push(profile);
     execFile('osascript', args, { maxBuffer: 1024 * 1024 * 10 }, () => {});
   });
 
@@ -574,6 +592,8 @@ ipcMain.handle('save-workflow', (_, workflow) => {
         ...(a.folderPath ? { folderPath: String(a.folderPath).slice(0, 512) } : {}),
         ...(a.labelFallback ? { labelFallback: String(a.labelFallback).slice(0, 256) } : {}),
         ...(a.filePath ? { filePath: String(a.filePath).slice(0, 512) } : {}),
+        ...(a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile) ? { profile: a.profile } : {}),
+        ...(a.label ? { label: String(a.label).slice(0, 256) } : {}),
       })),
       // preserve existing hotkey — save-workflow doesn't touch it
       ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),
@@ -636,6 +656,21 @@ ipcMain.handle('open-shortcuts-app', () => {
 ipcMain.handle('open-external', (_, url) => {
   if (!isSafeUrl(url)) return;
   shell.openExternal(url);
+});
+
+ipcMain.handle('list-chrome-profiles', () => {
+  return new Promise(resolve => {
+    execFile(
+      'osascript',
+      ['-l', 'JavaScript', jxaPath('chrome_profiles.jxa'), 'list'],
+      { timeout: 3000 },
+      (err, stdout) => {
+        if (err) return resolve([]);
+        try { resolve(JSON.parse(String(stdout || '[]'))); }
+        catch (e) { resolve([]); }
+      }
+    );
+  });
 });
 
 ipcMain.handle('get-free-limit', () => FREE_LIMIT);

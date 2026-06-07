@@ -1,6 +1,7 @@
 function run(argv) {
   var appName = argv[0];
   var urlArg  = argv[1]; // optional — browser tab URL to close
+  var profileArg = argv[2] || null; // optional Chrome profile dir
 
   var browsers = ["Google Chrome", "Safari", "Arc"];
 
@@ -14,8 +15,50 @@ function run(argv) {
     var closed = false;
     var isSafari = (appName === "Safari");
 
-    // Strategy 1: exact URL match
+    // When a Chrome profile is specified, build the set of window IDs whose
+    // title-suffix matches that profile's display name. We restrict close
+    // matching to those windows so we don't kill tabs in other profiles.
+    // If we can't identify any matching windows (modern Chrome hides profile
+    // name from titles), we fall through to scanning all windows — same as
+    // pre-profile behavior.
+    var profileWindowIds = null;
+    if (profileArg && appName === "Google Chrome") {
+      try {
+        var sysAppC = Application.currentApplication();
+        sysAppC.includeStandardAdditions = true;
+        var rawLS = sysAppC.doShellScript(
+          "cat ~/Library/Application\\ Support/Google/Chrome/Local\\ State 2>/dev/null || echo '{}'"
+        );
+        var lsData = JSON.parse(rawLS);
+        var cache = (lsData.profile && lsData.profile.info_cache) || {};
+        var displayName = cache[profileArg] && cache[profileArg].name;
+        if (displayName) {
+          var esc = String(displayName).replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
+          var matchRe = new RegExp(" - " + esc + "$");
+          profileWindowIds = {};
+          var allWins = browser.windows();
+          var anyMatched = false;
+          for (var pwi = 0; pwi < allWins.length; pwi++) {
+            try {
+              if (matchRe.test(String(allWins[pwi].name() || ""))) {
+                profileWindowIds[String(allWins[pwi].id())] = true;
+                anyMatched = true;
+              }
+            } catch(e) {}
+          }
+          if (!anyMatched) profileWindowIds = null; // graceful fall-through
+        }
+      } catch(e) { profileWindowIds = null; }
+    }
+
+    function windowAllowed(win) {
+      if (!profileWindowIds) return true;
+      try { return !!profileWindowIds[String(win.id())]; } catch(e) { return false; }
+    }
+
+    // Strategy 1: exact URL match (within allowed windows when profile is set)
     outerExact: for (var w = 0; w < browser.windows.length; w++) {
+      if (!windowAllowed(browser.windows[w])) continue;
       var tabs = browser.windows[w].tabs;
       for (var t = 0; t < tabs.length; t++) {
         var tabUrl = isSafari ? tabs[t].URL() : tabs[t].url();
@@ -27,9 +70,10 @@ function run(argv) {
       }
     }
 
-    // Strategy 2: same-origin fallback
+    // Strategy 2: same-origin fallback (within allowed windows when profile is set)
     if (!closed) {
       outerOrigin: for (var w2 = 0; w2 < browser.windows.length; w2++) {
+        if (!windowAllowed(browser.windows[w2])) continue;
         var tabs2 = browser.windows[w2].tabs;
         for (var t2 = 0; t2 < tabs2.length; t2++) {
           var u = (isSafari ? tabs2[t2].URL() : tabs2[t2].url()) || '';

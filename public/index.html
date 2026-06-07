@@ -1397,6 +1397,13 @@
   // ── Capture flow ──────────────────────────────────────────────────────────
 
   let capturedApps = [];
+  let chromeProfilesPromise = null;
+  function getChromeProfiles() {
+    if (!chromeProfilesPromise) {
+      chromeProfilesPromise = window.api.listChromeProfiles().catch(() => []);
+    }
+    return chromeProfilesPromise;
+  }
   let currentFocusMode = null;
   let captureGen = 0; // incremented on each capture; stale results are discarded
   let capturePoller = null;
@@ -1717,6 +1724,70 @@
 
         row.appendChild(appSpan);
         row.appendChild(urlSpan);
+
+        if (a.name === 'Google Chrome') {
+          const chromeApp = a;
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'chrome-profile-btn';
+          btn.title = 'Chrome profile';
+          btn.style.cssText = 'margin-left:auto;border:none;background:transparent;color:var(--helm-fog);cursor:pointer;font-size:12px;line-height:1;padding:2px 6px;border-radius:3px;display:flex;align-items:center;gap:4px;';
+          function renderBtnLabel() {
+            getChromeProfiles().then(profiles => {
+              const match = (profiles || []).find(p => p.dir === chromeApp.profile);
+              const lbl = match ? match.name : (chromeApp.profile ? chromeApp.profile : '');
+              btn.innerHTML = '<span style="font-size:11px;">👤</span>'
+                + (lbl ? '<span style="font-size:10px;color:var(--helm-gold);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + lbl.replace(/[<>&]/g, '') + '</span>' : '');
+            });
+          }
+          renderBtnLabel();
+          const blockBtn = e => e.stopPropagation();
+          btn.addEventListener('mousedown', blockBtn);
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            // Close any existing popup
+            document.querySelectorAll('.chrome-profile-popup').forEach(el => el.remove());
+            const pop = document.createElement('div');
+            pop.className = 'chrome-profile-popup';
+            const rect = btn.getBoundingClientRect();
+            pop.style.cssText = 'position:fixed;top:' + (rect.bottom + 4) + 'px;right:' + (window.innerWidth - rect.right) + 'px;'
+              + 'background:var(--helm-navy);border:0.5px solid rgba(247,244,239,0.15);border-radius:6px;'
+              + 'padding:4px 0;min-width:180px;max-height:280px;overflow-y:auto;z-index:9999;'
+              + 'box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+            pop.addEventListener('mousedown', e => e.stopPropagation());
+            pop.addEventListener('click', e => e.stopPropagation());
+            function makeOpt(label, value) {
+              const r = document.createElement('div');
+              r.style.cssText = 'padding:6px 12px;font-size:11px;color:var(--helm-chalk);cursor:pointer;'
+                + (value === (chromeApp.profile || '') ? 'background:rgba(212,175,106,0.12);color:var(--helm-gold);' : '');
+              r.textContent = label;
+              r.addEventListener('mouseenter', () => { if (value !== (chromeApp.profile || '')) r.style.background = 'rgba(247,244,239,0.05)'; });
+              r.addEventListener('mouseleave', () => { if (value !== (chromeApp.profile || '')) r.style.background = ''; });
+              r.addEventListener('click', () => {
+                if (value) chromeApp.profile = value; else delete chromeApp.profile;
+                renderBtnLabel();
+                pop.remove();
+              });
+              return r;
+            }
+            pop.appendChild(makeOpt('(default — last active)', ''));
+            getChromeProfiles().then(profiles => {
+              (profiles || []).forEach(p => {
+                pop.appendChild(makeOpt(p.name + ' · ' + p.dir, p.dir));
+              });
+            });
+            document.body.appendChild(pop);
+            const dismiss = (e) => {
+              if (!pop.contains(e.target) && e.target !== btn) {
+                pop.remove();
+                document.removeEventListener('mousedown', dismiss, true);
+              }
+            };
+            setTimeout(() => document.addEventListener('mousedown', dismiss, true), 0);
+          });
+          row.appendChild(btn);
+        }
+
         row.addEventListener('click', () => toggleItem(i));
         listEl.appendChild(row);
       });

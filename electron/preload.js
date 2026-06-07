@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('api', {
   getModeToggleHotkey:    ()   => ipcRenderer.invoke('get-mode-toggle-hotkey'),
   onModeChanged:          (cb) => ipcRenderer.on('mode-changed', (_, on) => cb(on)),
   openShortcutsApp:       ()   => ipcRenderer.invoke('open-shortcuts-app'),
+  listChromeProfiles:     ()   => ipcRenderer.invoke('list-chrome-profiles'),
   onWorkflowWarning:      (cb) => ipcRenderer.on('workflow-warning', (_, data) => cb(data)),
   onLicenseActivated:     (cb) => ipcRenderer.on('license-activated',      (_, data) => cb(data)),
   onLicenseStatusChanged: (cb) => ipcRenderer.on('license-status-changed', (_, data) => cb(data)),
