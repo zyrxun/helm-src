@@ -2,6 +2,7 @@ function run(argv) {
   var appName = argv[0];
   var urlArg  = argv[1]; // optional — browser tab URL to close
   var profileArg = argv[2] || null; // optional Chrome profile dir
+  var winTitlesArg = argv[3] || null; // optional \x1f-separated window titles in target profile
 
   var browsers = ["Google Chrome", "Safari", "Arc"];
 
@@ -15,14 +16,35 @@ function run(argv) {
     var closed = false;
     var isSafari = (appName === "Safari");
 
-    // When a Chrome profile is specified, build the set of window IDs whose
-    // title-suffix matches that profile's display name. We restrict close
-    // matching to those windows so we don't kill tabs in other profiles.
-    // If we can't identify any matching windows (modern Chrome hides profile
-    // name from titles), we fall through to scanning all windows — same as
-    // pre-profile behavior.
+    // Resolve which windows belong to the target profile. Best signal is the
+    // exact title list provided by main.js (from the native AX helper).
+    // If absent, fall back to title-suffix matching against the profile's
+    // display name. If neither yields any windows, scan all (legacy behavior).
     var profileWindowIds = null;
     if (profileArg && appName === "Google Chrome") {
+      var allWins = browser.windows();
+      var titleSet = null;
+      if (winTitlesArg) {
+        titleSet = {};
+        var parts = String(winTitlesArg).split(String.fromCharCode(31));
+        for (var ti = 0; ti < parts.length; ti++) {
+          if (parts[ti]) titleSet[parts[ti]] = true;
+        }
+      }
+      if (titleSet) {
+        profileWindowIds = {};
+        var matched1 = false;
+        for (var w1 = 0; w1 < allWins.length; w1++) {
+          try {
+            if (titleSet[String(allWins[w1].name() || "")]) {
+              profileWindowIds[String(allWins[w1].id())] = true;
+              matched1 = true;
+            }
+          } catch(e) {}
+        }
+        if (!matched1) profileWindowIds = null;
+      }
+      if (!profileWindowIds) {
       try {
         var sysAppC = Application.currentApplication();
         sysAppC.includeStandardAdditions = true;
@@ -36,7 +58,6 @@ function run(argv) {
           var esc = String(displayName).replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
           var matchRe = new RegExp(" - " + esc + "$");
           profileWindowIds = {};
-          var allWins = browser.windows();
           var anyMatched = false;
           for (var pwi = 0; pwi < allWins.length; pwi++) {
             try {
@@ -49,6 +70,7 @@ function run(argv) {
           if (!anyMatched) profileWindowIds = null; // graceful fall-through
         }
       } catch(e) { profileWindowIds = null; }
+      } // end if (!profileWindowIds) — title-suffix fallback
     }
 
     function windowAllowed(win) {

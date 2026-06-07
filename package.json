@@ -7,9 +7,10 @@
   "main": "electron/main.js",
   "scripts": {
     "build": "tsc && mkdir -p dist/jxa && cp src/platform/macos/*.jxa dist/jxa/",
-    "menu-bar": "tsc && electron electron/main.js",
-    "pack": "electron-builder --mac",
-    "release": "electron-builder --mac --publish always",
+    "build-helper": "bash scripts/chrome-profile-probe/build.sh",
+    "menu-bar": "npm run build-helper && tsc && electron electron/main.js",
+    "pack": "npm run build-helper && electron-builder --mac",
+    "release": "npm run build-helper && electron-builder --mac --publish always",
     "build-icon": "bash scripts/build-icon.sh"
   },
   "build": {
@@ -84,6 +85,13 @@
         "to": "jxa",
         "filter": [
           "*.jxa"
+        ]
+      },
+      {
+        "from": "scripts/chrome-profile-probe/bin",
+        "to": "bin",
+        "filter": [
+          "chrome-profile-probe"
         ]
       }
     ],

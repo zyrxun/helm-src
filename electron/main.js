@@ -21,6 +21,12 @@ function jxaPath(filename) {
   const dev    = path.join(__dirname, '../src/platform/macos', filename);
   return require('fs').existsSync(packed) ? packed : dev;
 }
+
+function profileProbePath() {
+  const packed = path.join(process.resourcesPath ?? '', 'bin', 'chrome-profile-probe');
+  const dev    = path.join(__dirname, '../scripts/chrome-profile-probe/bin/chrome-profile-probe');
+  return require('fs').existsSync(packed) ? packed : dev;
+}
 const storage = require('./storage');
 const license = require('./license');
 
@@ -93,6 +99,28 @@ function enrichSlackApps(apps) {
         resolve(apps);
       }
     });
+  });
+}
+
+async function enrichChromeProfiles(apps) {
+  const hasChrome = apps.some(a => a.name === 'Google Chrome' && a._windowTitle);
+  if (!hasChrome) {
+    // Still strip the internal field for any Chrome tabs without titles
+    return apps.map(a => {
+      if (!a._windowTitle) return a;
+      const { _windowTitle, ...rest } = a;
+      return rest;
+    });
+  }
+  const map = await callProfileProbe('windowProfiles');
+  return apps.map(a => {
+    if (a.name !== 'Google Chrome') return a;
+    const { _windowTitle, ...rest } = a;
+    if (map && typeof map === 'object' && _windowTitle && map[_windowTitle]) {
+      const dir = map[_windowTitle];
+      if (/^(Default|Profile [0-9]+)$/.test(dir)) rest.profile = dir;
+    }
+    return rest;
   });
 }
 
@@ -402,6 +430,15 @@ async function teardownWorkflowById(workflowId) {
       urlToOpen: a.urlToOpen,
       profile: a.profile,
     }));
+
+  // If any Chrome target carries a profile, fetch the live window→profile
+  // map once so close.jxa can filter by exact window title (the only way to
+  // pin a tab to its profile on modern Chrome).
+  let chromeWinMap = null;
+  if (targets.some(t => t.name === 'Google Chrome' && t.profile)) {
+    chromeWinMap = await callProfileProbe('windowProfiles');
+  }
+
   await Promise.all(targets.map(a =>
     new Promise(resolve => {
       const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), a.name];
@@ -409,6 +446,12 @@ async function teardownWorkflowById(workflowId) {
         closeArgs.push(a.urlToOpen);
         if (a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile)) {
           closeArgs.push(a.profile);
+          // 4th arg: comma-joined window titles in this profile (best-effort).
+          if (chromeWinMap && typeof chromeWinMap === 'object') {
+            const matching = Object.keys(chromeWinMap)
+              .filter(t => chromeWinMap[t] === a.profile);
+            if (matching.length) closeArgs.push(matching.join(''));
+          }
         }
       }
       execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
@@ -558,6 +601,7 @@ ipcMain.handle('capture-state', () => {
           // Enrich Slack (channel deep link) and Code (open files) via local app state
           enrichSlackApps(apps)
             .then(enrichCodeApps)
+            .then(enrichChromeProfiles)
             .then(enriched => resolve({ ok: true, apps: enriched }))
             .catch(() => resolve({ ok: true, apps }));
         } catch (e) {
@@ -658,7 +702,23 @@ ipcMain.handle('open-external', (_, url) => {
   shell.openExternal(url);
 });
 
-ipcMain.handle('list-chrome-profiles', () => {
+function callProfileProbe(action) {
+  return new Promise(resolve => {
+    const bin = profileProbePath();
+    if (!require('fs').existsSync(bin)) return resolve(null);
+    execFile(bin, [action], { timeout: 5000, maxBuffer: 1024 * 1024 * 4 },
+      (err, stdout) => {
+        if (err) return resolve(null);
+        try { resolve(JSON.parse(String(stdout || 'null'))); }
+        catch (e) { resolve(null); }
+      });
+  });
+}
+
+ipcMain.handle('list-chrome-profiles', async () => {
+  const fromHelper = await callProfileProbe('list');
+  if (Array.isArray(fromHelper)) return fromHelper;
+  // Fallback to JXA (dev before swiftc compile)
   return new Promise(resolve => {
     execFile(
       'osascript',
