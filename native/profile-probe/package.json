@@ -1,0 +1,12 @@
+{
+  "name": "profile-probe",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "install": "node-gyp rebuild"
+  },
+  "dependencies": {
+    "node-addon-api": "^7.1.0"
+  }
+}

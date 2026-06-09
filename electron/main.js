@@ -102,22 +102,177 @@ function enrichSlackApps(apps) {
   });
 }
 
+// Native AX module previously used for window→profile mapping. Kept loaded for
+// possible future use but no longer required — title-based matching covers all
+// windows across Spaces without needing Accessibility permission.
+let nativeProfileProbe = null;
+try { nativeProfileProbe = require('../native/profile-probe'); }
+catch (e) { console.error('[profile-probe] native module unavailable:', e.message); }
+
+async function chromeWindowProfilesViaTitle() {
+  // Build {windowTitle: profileDir} by enumerating live Chrome windows + parsing titles.
+  const profileList = await callProfileProbe('list');
+  const byName = new Map();
+  if (Array.isArray(profileList)) {
+    for (const p of profileList) {
+      if (p && p.name && p.dir) byName.set(String(p.name), String(p.dir));
+    }
+  }
+  if (byName.size === 0) return {};
+  const titles = await new Promise(resolve => {
+    execFile('osascript', ['-l', 'JavaScript', '-e',
+      "function run() { try { var c=Application('Google Chrome'); if(!c.running()) return '[]'; return JSON.stringify(c.windows().map(function(w){try{return String(w.name());}catch(e){return '';}})); } catch(e) { return '[]'; } }"
+    ], { timeout: 4000 }, (err, stdout) => {
+      if (err) return resolve([]);
+      try { resolve(JSON.parse(String(stdout).trim())); } catch(_) { resolve([]); }
+    });
+  });
+  const map = {};
+  for (const t of titles) {
+    const dir = profileDirFromWindowTitle(t, byName);
+    if (dir) map[t] = dir;
+  }
+  return map;
+}
+
+function profileDirFromWindowTitle(title, profilesByName) {
+  if (!title) return null;
+  // Chrome appends " – <display name>" (em-dash) to window titles when 2+ profiles run.
+  const emDash = title.lastIndexOf(' – ');
+  if (emDash === -1) return null;
+  const suffix = title.slice(emDash + 3).trim();
+  // Try full suffix, then suffix with parenthetical stripped.
+  const base = suffix.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  return profilesByName.get(suffix) || profilesByName.get(base) || null;
+}
+
+function loadChromeProfileCatalog() {
+  // Read Chrome's Local State and return a Map of every display form Chrome
+  // might put in a window title → profile directory.
+  const byKey = new Map();
+  const add = (key, dir) => {
+    if (key && dir && !byKey.has(key)) byKey.set(key, dir);
+  };
+  try {
+    const localStatePath = require('path').join(
+      require('os').homedir(),
+      'Library/Application Support/Google/Chrome/Local State'
+    );
+    const raw = require('fs').readFileSync(localStatePath, 'utf8');
+    const data = JSON.parse(raw);
+    const cache = (data.profile && data.profile.info_cache) || {};
+    for (const [dir, info] of Object.entries(cache)) {
+      if (!info) continue;
+      const name = info.name;
+      const gaiaName = info.gaia_given_name || info.gaia_name;
+      const userName = info.user_name;
+      add(name, dir);
+      if (gaiaName) add(gaiaName, dir);
+      if (userName) add(userName, dir);
+      // Chrome's disambiguated title format combines display name + descriptor.
+      // Observed format: "{gaia_given_name} ({name})" when multiple profiles share gaia name.
+      // Also handles "{name} ({user_name})" and "{gaia_name} ({name})".
+      if (gaiaName && name && gaiaName !== name) add(`${gaiaName} (${name})`, dir);
+      if (name && userName) add(`${name} (${userName})`, dir);
+      if (name && gaiaName && gaiaName !== name) add(`${name} (${gaiaName})`, dir);
+    }
+  } catch (e) {
+    console.error('[profile-probe] Local State read failed:', e.message);
+  }
+  return byKey;
+}
+
+function tabTitleToProfileMapFromAX() {
+  // Use the native AX module to get full window titles (with profile suffix),
+  // then build a map of tabTitle → profileDir. Only sees current-Space windows.
+  const out = new Map();
+  if (!nativeProfileProbe || !nativeProfileProbe.windowsRaw) return out;
+  let raw;
+  try { raw = nativeProfileProbe.windowsRaw(); } catch (_) { return out; }
+  if (!Array.isArray(raw)) return out;
+  const catalog = loadChromeProfileCatalog();
+  if (catalog.size === 0) return out;
+  for (const w of raw) {
+    if (!w || !w.title) continue;
+    const dir = profileDirFromWindowTitle(w.title, catalog);
+    if (!dir) continue;
+    // Strip " - Google Chrome – …" from full title to recover the tab title.
+    const tabTitle = w.title.replace(/\s+-\s+Google Chrome\s+[–-]\s+.*$/, '').trim();
+    if (tabTitle) out.set(tabTitle, dir);
+  }
+  return out;
+}
+
+async function buildHistoryProfileMap(urls) {
+  // For each Chrome profile, look up which URLs it has visited and when. The
+  // profile with the most-recent visit for each URL wins. Reads each profile's
+  // History SQLite via the system sqlite3 CLI (no new deps).
+  if (!urls.length) return new Map();
+  const path = require('path');
+  const fs = require('fs');
+  const os = require('os');
+  const catalog = loadChromeProfileCatalog();
+  if (catalog.size === 0) return new Map();
+  const profileDirs = Array.from(new Set(catalog.values()));
+  const chromeRoot = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
+
+  const byUrl = new Map(); // url → {dir, time}
+  for (const dir of profileDirs) {
+    const src = path.join(chromeRoot, dir, 'History');
+    if (!fs.existsSync(src)) continue;
+    const tmp = path.join(os.tmpdir(), `helm-history-${dir.replace(/\s+/g, '_')}.db`);
+    try {
+      fs.copyFileSync(src, tmp);
+    } catch (e) { continue; }
+    const inClause = urls.map(u => "'" + String(u).replace(/'/g, "''") + "'").join(',');
+    const sql = `SELECT url, MAX(last_visit_time) FROM urls WHERE url IN (${inClause}) GROUP BY url;`;
+    const out = await new Promise(resolve => {
+      execFile('/usr/bin/sqlite3', [tmp, sql], { timeout: 4000, maxBuffer: 1024 * 1024 * 4 },
+        (err, stdout) => resolve(err ? '' : String(stdout)));
+    });
+    try { fs.unlinkSync(tmp); } catch (_) {}
+    for (const line of out.split('\n')) {
+      const idx = line.indexOf('|');
+      if (idx < 0) continue;
+      const url = line.slice(0, idx);
+      const t = parseInt(line.slice(idx + 1), 10);
+      if (!url || !Number.isFinite(t)) continue;
+      const prev = byUrl.get(url);
+      if (!prev || t > prev.time) byUrl.set(url, { dir, time: t });
+    }
+  }
+
+  const flat = new Map();
+  for (const [url, { dir }] of byUrl) flat.set(url, dir);
+  return flat;
+}
+
 async function enrichChromeProfiles(apps) {
-  const hasChrome = apps.some(a => a.name === 'Google Chrome' && a._windowTitle);
-  if (!hasChrome) {
-    // Still strip the internal field for any Chrome tabs without titles
+  const chromeRows = apps.filter(a => a.name === 'Google Chrome' && (a._windowTitle || a.urlToOpen));
+  if (chromeRows.length === 0) {
     return apps.map(a => {
       if (!a._windowTitle) return a;
       const { _windowTitle, ...rest } = a;
       return rest;
     });
   }
-  const map = await callProfileProbe('windowProfiles');
+  // AX provides high-confidence attribution for visible windows.
+  const axMap = tabTitleToProfileMapFromAX();
+  // History DB provides fallback attribution for all other Chrome rows.
+  const chromeUrls = chromeRows
+    .map(a => a.urlToOpen)
+    .filter(u => typeof u === 'string' && /^https?:\/\//i.test(u));
+  let historyMap = new Map();
+  try { historyMap = await buildHistoryProfileMap(chromeUrls); }
+  catch (e) { console.error('[profile-probe] history lookup failed:', e.message); }
+  console.error('[profile-probe] AX matches:', axMap.size, 'history matches:', historyMap.size);
   return apps.map(a => {
     if (a.name !== 'Google Chrome') return a;
     const { _windowTitle, ...rest } = a;
-    if (map && typeof map === 'object' && _windowTitle && map[_windowTitle]) {
-      const dir = map[_windowTitle];
+    if (_windowTitle && axMap.has(_windowTitle)) {
+      rest.profile = axMap.get(_windowTitle);
+    } else if (a.urlToOpen && historyMap.has(a.urlToOpen)) {
+      const dir = historyMap.get(a.urlToOpen);
       if (/^(Default|Profile [0-9]+)$/.test(dir)) rest.profile = dir;
     }
     return rest;
@@ -317,6 +472,14 @@ function isSafeString(s, maxLen = 256) {
   return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_STRING.test(s);
 }
 
+// Display-only fields (labels, window titles) — these are stored as data and
+// rendered as text, never passed to a shell. Reject only control chars and
+// require a reasonable length.
+const SAFE_DISPLAY = /^[^\x00-\x1f\x7f]*$/;
+function isSafeDisplayString(s, maxLen = 256) {
+  return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_DISPLAY.test(s);
+}
+
 function isSafeUrl(u, maxLen = 2048) {
   return typeof u === 'string' && u.length <= maxLen && SAFE_URL.test(u);
 }
@@ -326,36 +489,42 @@ function isSafeId(s) {
 }
 
 function validateWorkflow(w) {
-  if (!w || typeof w !== 'object') return false;
-  if (!isSafeId(w.id))                          return false;
-  if (!isSafeString(w.name, 128))               return false;
-  if (!Array.isArray(w.apps) || w.apps.length > 100) return false;
-  for (const app of w.apps) {
-    if (!app || typeof app !== 'object')         return false;
-    if (!isSafeString(app.name, 128))            return false;
+  if (!w || typeof w !== 'object')                  return { ok: false, field: 'workflow' };
+  if (!isSafeId(w.id))                              return { ok: false, field: 'id' };
+  if (!isSafeString(w.name, 128))                   return { ok: false, field: 'name' };
+  if (!Array.isArray(w.apps))                       return { ok: false, field: 'apps' };
+  if (w.apps.length > 100)                          return { ok: false, field: 'apps', reason: 'too_many', count: w.apps.length, limit: 100 };
+  for (let i = 0; i < w.apps.length; i++) {
+    const app = w.apps[i];
+    const at = (f) => ({ ok: false, field: f, index: i, appName: app && app.name });
+    if (!app || typeof app !== 'object')            return at('app');
+    if (!isSafeDisplayString(app.name, 128))        return at('app.name');
     if (app.urlToOpen !== undefined && app.urlToOpen !== null &&
-        !isSafeUrl(app.urlToOpen))               return false;
+        !isSafeUrl(app.urlToOpen))                  return at('app.urlToOpen');
     if (app.folderPath !== undefined &&
-        !isSafeString(app.folderPath, 512))      return false;
+        !isSafeString(app.folderPath, 512))         return at('app.folderPath');
     if (app.labelFallback !== undefined &&
-        !isSafeString(app.labelFallback, 256))   return false;
+        !isSafeDisplayString(app.labelFallback, 256)) return at('app.labelFallback');
     if (app.filePath !== undefined &&
-        !isSafeString(app.filePath, 512))        return false;
+        !isSafeString(app.filePath, 512))           return at('app.filePath');
     if (app.profile !== undefined && app.profile !== null && app.profile !== '' &&
-        !/^(Default|Profile [0-9]+)$/.test(app.profile)) return false;
+        !/^(Default|Profile [0-9]+)$/.test(app.profile)) return at('app.profile');
     if (app.label !== undefined &&
-        !isSafeString(app.label, 256))             return false;
+        !isSafeDisplayString(app.label, 256))       return at('app.label');
   }
-  if (w.focusMode !== undefined && !isSafeString(w.focusMode, 128)) return false;
+  if (w.focusMode !== undefined && !isSafeString(w.focusMode, 128)) return { ok: false, field: 'focusMode' };
   if (w.closeApps !== undefined) {
-    if (!Array.isArray(w.closeApps) || w.closeApps.length > 50) return false;
-    for (const a of w.closeApps) {
-      if (!a || typeof a !== 'object') return false;
-      if (!isSafeString(a.name, 128)) return false;
-      if (a.urlToOpen !== undefined && !isSafeUrl(a.urlToOpen)) return false;
+    if (!Array.isArray(w.closeApps))                return { ok: false, field: 'closeApps' };
+    if (w.closeApps.length > 50)                    return { ok: false, field: 'closeApps', reason: 'too_many', count: w.closeApps.length, limit: 50 };
+    for (let i = 0; i < w.closeApps.length; i++) {
+      const a = w.closeApps[i];
+      const at = (f) => ({ ok: false, field: f, index: i, appName: a && a.name });
+      if (!a || typeof a !== 'object')              return at('closeApp');
+      if (!isSafeString(a.name, 128))               return at('closeApp.name');
+      if (a.urlToOpen !== undefined && !isSafeUrl(a.urlToOpen)) return at('closeApp.urlToOpen');
     }
   }
-  return true;
+  return { ok: true };
 }
 
 // ── Hotkey helpers ────────────────────────────────────────────────────────────
@@ -436,7 +605,7 @@ async function teardownWorkflowById(workflowId) {
   // pin a tab to its profile on modern Chrome).
   let chromeWinMap = null;
   if (targets.some(t => t.name === 'Google Chrome' && t.profile)) {
-    chromeWinMap = await callProfileProbe('windowProfiles');
+    chromeWinMap = await chromeWindowProfilesViaTitle();
   }
 
   await Promise.all(targets.map(a =>
@@ -591,13 +760,15 @@ ipcMain.handle('capture-state', () => {
         try {
           const data = JSON.parse(stdout.trim());
           // Strip any URLs that aren't safe schemes — Spotify track IDs, chrome://, etc.
-          let apps = (data.apps || []).map(a => {
-            if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
-              const { urlToOpen, ...rest } = a;
-              return rest;
-            }
-            return a;
-          });
+          let apps = (data.apps || [])
+            .filter(a => a && typeof a.name === 'string' && a.name.trim().length > 0)
+            .map(a => {
+              if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
+                const { urlToOpen, ...rest } = a;
+                return rest;
+              }
+              return a;
+            });
           // Enrich Slack (channel deep link) and Code (open files) via local app state
           enrichSlackApps(apps)
             .then(enrichCodeApps)
@@ -614,7 +785,23 @@ ipcMain.handle('capture-state', () => {
 
 ipcMain.handle('save-workflow', (_, workflow) => {
   try {
-    if (!validateWorkflow(workflow)) return { ok: false, reason: 'invalid_input' };
+    const v = validateWorkflow(workflow);
+    if (!v.ok) {
+      if (v.field === 'apps' && v.reason === 'too_many') {
+        return { ok: false, reason: 'too_many_apps', limit: v.limit, count: v.count };
+      }
+      if (v.field === 'closeApps' && v.reason === 'too_many') {
+        return { ok: false, reason: 'too_many_close_apps', limit: v.limit, count: v.count };
+      }
+      let badValue;
+      try {
+        if (v.index !== undefined && workflow.apps && workflow.apps[v.index]) {
+          const k = v.field.split('.')[1];
+          badValue = k ? workflow.apps[v.index][k] : workflow.apps[v.index];
+        }
+      } catch(_) {}
+      return { ok: false, reason: 'invalid_input', field: v.field, index: v.index, appName: v.appName, badValue: JSON.stringify(badValue)?.slice(0, 200) };
+    }
 
     const workflows = storage.load();
     const idx = workflows.findIndex(w => w.id === workflow.id);
@@ -705,10 +892,17 @@ ipcMain.handle('open-external', (_, url) => {
 function callProfileProbe(action) {
   return new Promise(resolve => {
     const bin = profileProbePath();
-    if (!require('fs').existsSync(bin)) return resolve(null);
+    if (!require('fs').existsSync(bin)) {
+      console.error('[profile-probe] binary missing at', bin);
+      return resolve(null);
+    }
     execFile(bin, [action], { timeout: 5000, maxBuffer: 1024 * 1024 * 4 },
-      (err, stdout) => {
-        if (err) return resolve(null);
+      (err, stdout, stderr) => {
+        if (err) {
+          console.error('[profile-probe]', action, 'error:', err.message, 'stderr:', stderr);
+          return resolve(null);
+        }
+        console.error('[profile-probe]', action, 'stdout:', String(stdout).slice(0, 200));
         try { resolve(JSON.parse(String(stdout || 'null'))); }
         catch (e) { resolve(null); }
       });

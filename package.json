@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "productName": "Helm",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "macOS menu bar workflow orchestrator",
   "author": "zyrxun",
   "main": "electron/main.js",
@@ -17,8 +17,9 @@
     "appId": "com.helm.app",
     "productName": "Helm",
     "publish": {
-      "provider": "generic",
-      "url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev"
+      "provider": "github",
+      "owner": "zyrxun",
+      "repo": "helm-releases"
     },
     "asar": true,
     "compression": "maximum",
@@ -37,7 +38,10 @@
       "!**/node_modules/*/{test,tests,__tests__,powered-test,example,examples,docs,doc,.github}",
       "!**/node_modules/*.d.ts",
       "!**/node_modules/.bin",
-      "!**/node_modules/**/{*.cc,*.h,*.gyp,*.gypi,binding.gyp,Makefile,*.mk}"
+      "!**/node_modules/**/{*.cc,*.h,*.gyp,*.gypi,binding.gyp,Makefile,*.mk}",
+      "native/profile-probe/index.js",
+      "native/profile-probe/package.json",
+      "native/profile-probe/build/Release/*.node"
     ],
     "mac": {
       "category": "public.app-category.productivity",
@@ -59,7 +63,8 @@
             "universal"
           ]
         }
-      ]
+      ],
+      "x64ArchFiles": "Contents/Resources/bin/*"
     },
     "dmg": {
       "background": "public/brand/dmg-background.png",
@@ -95,22 +100,22 @@
         ]
       }
     ],
-    "publish": {
-      "provider": "github",
-      "owner": "zyrxun",
-      "repo": "helm-releases"
-    }
+    "asarUnpack": [
+      "native/profile-probe/build/Release/*.node"
+    ]
   },
   "devDependencies": {
     "@electron/notarize": "^2.5.0",
     "@types/node": "^20.0.0",
     "electron": "^42.3.0",
     "electron-builder": "^25.0.0",
+    "node-gyp": "^12.4.0",
     "typescript": "^5.0.0"
   },
   "dependencies": {
     "@sentry/electron": "^7.13.0",
     "dotenv": "^16.0.0",
-    "electron-updater": "^6.8.3"
+    "electron-updater": "^6.8.3",
+    "profile-probe": "file:./native/profile-probe"
   }
 }

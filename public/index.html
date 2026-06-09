@@ -1416,8 +1416,12 @@
         try {
           const live = await window.api.captureState();
           if (!live?.ok) return;
+          const singleInstanceApps = new Set(['Spotify', 'Notion', 'Slack', 'zoom.us', 'FaceTime']);
           const knownKeys = new Set(capturedApps.map(appItemKey));
-          const newApps = (live.apps || []).filter(a => !knownKeys.has(appItemKey(a)));
+          const knownNames = new Set(capturedApps.map(a => a.name));
+          const newApps = (live.apps || []).filter(a =>
+            !knownKeys.has(appItemKey(a)) && !(singleInstanceApps.has(a.name) && knownNames.has(a.name))
+          );
           if (newApps.length > 0) {
             newApps.forEach(a => {
               capturedApps.push(a);
@@ -2009,6 +2013,16 @@
       showToast(msg);
     } else if (result.reason === 'upgrade') {
       showUpgrade(() => saveWorkflow());
+    } else if (result.reason === 'too_many_apps') {
+      showToast(`Too many windows to capture (${result.count}). Limit is ${result.limit} — close some windows or deselect some entries.`);
+    } else if (result.reason === 'too_many_close_apps') {
+      showToast(`Too many close targets (${result.count}). Limit is ${result.limit}.`);
+    } else if (result.reason === 'invalid_input') {
+      const who = result.appName ? ` ("${result.appName}")` : '';
+      const where = result.index !== undefined ? ` at entry #${result.index + 1}${who}` : '';
+      const val = result.badValue !== undefined ? ` value=${result.badValue}` : '';
+      console.error('[save-workflow] invalid_input', result);
+      showToast(`Save failed: invalid ${result.field || 'field'}${where}.${val}`);
     } else {
       showToast('Save failed: ' + (result.reason ?? 'unknown error'));
     }
@@ -2103,7 +2117,7 @@
       await window.api.deleteWorkflow(workflow.id);
       await loadWorkflows();
       if (pendingDeletes.size === 0) showToast('Workflow deleted.');
-    }, 4500);
+    }, 2250);
 
     pendingDeletes.set(workflow.id, { timer, name: workflow.name });
 
