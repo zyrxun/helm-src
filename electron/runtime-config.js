@@ -28,6 +28,6 @@ module.exports = {
   // `helmActivate` holds just this public key. Anyone who sees this key can
   // verify a signature; only the private-key holder can mint a new valid one.
   licensePublicKey: `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAKGseX/ZWvKeZYjWaB3RiWzjVf8hhoshfGfB5lpBcqWU=
+MCowBQYDK2VwAyEAg/fBpnvbCjSBfzA1dI30Ss1TWwL6ai3aQhvAXXVbeY4=
 -----END PUBLIC KEY-----`,
 };

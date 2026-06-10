@@ -19,3 +19,16 @@ HELM_LAUNCH_VIDEO.mov
 .env
 .env.*
 !.env.example
+
+# License signing private key — never commit
+.secrets/
+
+# Native + helper build artifacts
+native/profile-probe/bin/
+native/profile-probe/build/
+native/profile-probe/package-lock.json
+scripts/chrome-profile-probe/bin/
+.wrangler/
+
+# Apple Developer signing cert request
+*.certSigningRequest
