@@ -1427,7 +1427,9 @@
               capturedApps.push(a);
               appModes.set(capturedApps.length - 1, 'open');
             });
-            renderPreview();
+            // Preserve the user's in-progress mode choices and typed name while
+            // new windows stream in; a bare renderPreview() would reset them.
+            renderPreview(true, true);
           }
         } catch(e) {}
       }

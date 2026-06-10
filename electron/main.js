@@ -1,12 +1,18 @@
-require('dotenv').config({ path: require('path').join(__dirname, '../.env') });
+// In dev, load .env for build-only secrets that some code paths reference.
+// In a packaged app, .env is NOT shipped (see package.json build.files), and
+// runtime config comes from electron/runtime-config.js instead.
+if (!require('electron').app.isPackaged) {
+  try { require('dotenv').config({ path: require('path').join(__dirname, '../.env') }); } catch (_) {}
+}
 
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, systemPreferences, globalShortcut } = require('electron');
 const { autoUpdater } = require('electron-updater');
+const runtimeConfig = require('./runtime-config');
 
 const Sentry = require('@sentry/electron/main');
-if (process.env.SENTRY_DSN) {
+if (runtimeConfig.sentryDsn) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
+    dsn: runtimeConfig.sentryDsn,
     environment: app.isPackaged ? 'production' : 'development',
     tracesSampleRate: 1.0,
   });
@@ -364,7 +370,7 @@ app.whenReady().then(async () => {
   // Phase 1: fast local HMAC check — unblocks UI immediately
   const cached = license.load();
   if (cached.key) {
-    const local = license.validateLocalHmac(cached.key);
+    const local = license.verifyLocalSignature(cached.key);
     if (local.valid) { isPro = true; proEmail = local.email; }
 
     // Phase 2: background server re-verify — never blocks startup, fails safe
@@ -466,7 +472,7 @@ app.whenReady().then(async () => {
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const SAFE_STRING = /^[^\x00-\x1f\x7f"\\`$!|;&<>(){}[\]]*$/; // no shell metacharacters
-const SAFE_URL    = /^(https?|notion|slack|figma|obsidian):\/\//i;
+const SAFE_URL    = /^((https?|notion|slack|figma|obsidian):\/\/|spotify:[a-z]+:)/i;
 
 function isSafeString(s, maxLen = 256) {
   return typeof s === 'string' && s.length > 0 && s.length <= maxLen && SAFE_STRING.test(s);
@@ -595,7 +601,7 @@ async function teardownWorkflowById(workflowId) {
   const targets = (workflow.apps || [])
     .filter(a => a && isSafeString(a.name, 128))
     .map(a => ({
-      name: a.name.replace(/'/g, ''),
+      name: a.name,
       urlToOpen: a.urlToOpen,
       profile: a.profile,
     }));
@@ -615,11 +621,12 @@ async function teardownWorkflowById(workflowId) {
         closeArgs.push(a.urlToOpen);
         if (a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile)) {
           closeArgs.push(a.profile);
-          // 4th arg: comma-joined window titles in this profile (best-effort).
+          // 4th arg: \x1f-joined window titles in this profile (best-effort).
+          // close.jxa splits this on \x1f (String.fromCharCode(31)).
           if (chromeWinMap && typeof chromeWinMap === 'object') {
             const matching = Object.keys(chromeWinMap)
               .filter(t => chromeWinMap[t] === a.profile);
-            if (matching.length) closeArgs.push(matching.join(''));
+            if (matching.length) closeArgs.push(matching.join(String.fromCharCode(31)));
           }
         }
       }
@@ -729,7 +736,12 @@ function registerWorkflowShortcuts() {
 ipcMain.handle('get-workflows',   () => storage.load());
 ipcMain.handle('get-focus-modes', () => getFocusModes());
 
-ipcMain.handle('run-workflow', (_, workflowId) => runWorkflowById(workflowId));
+ipcMain.handle('run-workflow', async (_, workflowId) => {
+  if (activeExecutionGuard) return { ok: false, error: 'busy' };
+  activeExecutionGuard = true;
+  try { return await runWorkflowById(workflowId); }
+  finally { activeExecutionGuard = false; }
+});
 
 ipcMain.handle('teardown-workflow', async (_, id) => {
   if (activeExecutionGuard) return { ok: false, error: 'busy' };
@@ -819,7 +831,6 @@ ipcMain.handle('save-workflow', (_, workflow) => {
       apps: workflow.apps.map(a => ({
         name:      a.name,
         ...(a.urlToOpen ? { urlToOpen: a.urlToOpen } : {}),
-        ...(a.spotifyUri ? { spotifyUri: String(a.spotifyUri).slice(0, 256) } : {}),
         ...(a.folderPath ? { folderPath: String(a.folderPath).slice(0, 512) } : {}),
         ...(a.labelFallback ? { labelFallback: String(a.labelFallback).slice(0, 256) } : {}),
         ...(a.filePath ? { filePath: String(a.filePath).slice(0, 512) } : {}),
@@ -831,7 +842,10 @@ ipcMain.handle('save-workflow', (_, workflow) => {
       ...(workflow.focusMode ? { focusMode: String(workflow.focusMode).slice(0, 128) } : {}),
       // closeApps is Pro-only — stripped server-side for free users regardless of what renderer sends
       ...(isUserAuthorized() && Array.isArray(workflow.closeApps) && workflow.closeApps.length > 0
-        ? { closeApps: workflow.closeApps.map(a => ({ name: String(a.name).slice(0, 128) })) }
+        ? { closeApps: workflow.closeApps.map(a => ({
+            name: String(a.name).slice(0, 128),
+            ...(a.urlToOpen && isSafeUrl(a.urlToOpen) ? { urlToOpen: a.urlToOpen } : {}),
+          })) }
         : {}),
     };
 
@@ -931,7 +945,7 @@ ipcMain.handle('get-free-limit', () => FREE_LIMIT);
 
 ipcMain.handle('install-update', () => autoUpdater.quitAndInstall());
 
-ipcMain.handle('get-stripe-url', () => process.env.HELM_STRIPE_URL ?? null);
+ipcMain.handle('get-stripe-url', () => runtimeConfig.stripeUrl ?? null);
 
 ipcMain.handle('get-login-item', () => app.getLoginItemSettings().openAtLogin);
 
@@ -986,28 +1000,30 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
     attachLogs ? `\n--- Last 50 log lines ---\n${logSnippet}` : '',
   ].join('\n');
 
-  if (process.env.SENTRY_DSN) {
+  if (runtimeConfig.sentryDsn) {
     Sentry.captureMessage(`[Feedback] ${message.trim().slice(0, 120)}`, {
       level: 'info',
       extra: { body },
     });
   }
 
-  const to = process.env.HELM_FEEDBACK_EMAIL;
-  if (to && process.env.RESEND_API_KEY) {
+  // Forward to the Val.town feedback endpoint, which holds the Resend key
+  // server-side. No credentials in the client bundle.
+  if (runtimeConfig.feedbackEndpoint) {
     try {
       const https = require('https');
+      const url = new URL(runtimeConfig.feedbackEndpoint);
       const payload = JSON.stringify({
-        from: 'Helm Feedback <onboarding@resend.dev>',
-        to,
-        subject: `Helm Beta Feedback — v${app.getVersion()}`,
-        text: body,
+        version: app.getVersion(),
+        message: message.trim(),
+        body,
       });
       await new Promise((resolve) => {
         const req = https.request({
-          hostname: 'api.resend.com', path: '/emails', method: 'POST',
+          hostname: url.hostname,
+          path: url.pathname + url.search,
+          method: 'POST',
           headers: {
-            'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
             'Content-Type': 'application/json',
             'Content-Length': Buffer.byteLength(payload),
           },

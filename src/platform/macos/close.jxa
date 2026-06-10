@@ -56,7 +56,9 @@ function run(argv) {
         var displayName = cache[profileArg] && cache[profileArg].name;
         if (displayName) {
           var esc = String(displayName).replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-          var matchRe = new RegExp(" - " + esc + "$");
+          // Chrome uses either " - <profile>" (older) or " – <profile>"
+          // (en-dash, when 2+ profiles run); accept both so the fallback matches.
+          var matchRe = new RegExp(" [-–] " + esc + "$");
           profileWindowIds = {};
           var anyMatched = false;
           for (var pwi = 0; pwi < allWins.length; pwi++) {

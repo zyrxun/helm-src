@@ -65,3 +65,92 @@
 - [x] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [x] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
 - [x] Website / landing page — launch and prelaunch HTML ready
+
+## Code-review pass 1 — main process (verified findings, fix before launch)
+
+### Blockers
+- [ ] **B1.** `.env` was shipped inside `app.asar`. Done: removed from `build.files`, rotated `HELM_LICENSE_SECRET` + Apple app-specific password + Resend `Helm` key (revoked), migrated license signing from HMAC → Ed25519 (server holds private key, client only verifies with embedded public key), moved feedback path behind new Val.town `helmFeedback` endpoint (deployed + tested), added `scripts/audit-release.sh` pre-upload guard wired into `scripts/upload-release.sh`, introduced `electron/runtime-config.js` for safe-to-ship constants. Additional hardening: `helmActivate` now reads `HELM_LICENSE_PUBLIC_KEY` directly (no longer derives the public key from the private — minter and verifier each hold only what they need). Remaining: rebuild + reupload 1.0.2 so the no-secrets DMG supersedes the leaked 1.0.0/1.0.1.
+
+### Lower-priority secret rotations (current beta is trusted, so low immediate risk)
+- [ ] **B1a.** Rotate `META_PAGE_ACCESS_TOKEN` at developers.facebook.com (token wasn't referenced from code yet — was waiting on marketing tooling — but is in the public DMGs).
+- [ ] **B1b.** Rotate `SENTRY_DSN` at sentry.io (optional — write-only credential, worst case is fake event spam against quota; leak risk is low).
+- [ ] **B1c.** Verify `get-helm.app` at https://resend.com/domains so feedback emails come from `noreply@get-helm.app` instead of `onboarding@resend.dev` (currently using Resend's default test sender).
+- [x] **B2.** Per-profile teardown is broken end-to-end. `electron/main.js:622` joins matching titles with `''` but `src/platform/macos/close.jxa:29` splits on `\x1f`. Even with the join fixed, the fallback regex at `close.jxa:59` uses ` - ` (hyphen) while Chrome's disambiguator is ` – ` (en-dash). And the primary `chromeWindowProfilesViaTitle()` (`main.js:112`) reads titles via Apple Events, which return only the tab title — no profile suffix — so the map is always empty and falls into the broken fallback regardless. Result: per-profile teardown closes tabs across *all* profiles. Fix: change join to `'\x1f'`; align en-dash in close.jxa regex; switch the live title source from Apple Events to the native AX module (which does return the full suffix).
+
+### Should-fix
+- [ ] **S1.** Name validator mismatch. `electron/main.js:501` saves with `isSafeDisplayString` (allows `()&!`), but launch and teardown gate on stricter `isSafeString` (`main.js:596`, `:668`). Apps like "Microsoft Teams (work or school)" save fine but silently never open. Fix: use `isSafeDisplayString` at execution sites (execFile uses argv, no shell, so the strict filter buys nothing).
+- [x] **S2.** `closeApps[].urlToOpen` validated and consumed but never persisted. `main.js:834` saves only `{ name }`. Result: a "close this tab" target closes the whole browser instead. Fix: add `...(a.urlToOpen && isSafeUrl(a.urlToOpen) ? { urlToOpen: a.urlToOpen } : {})` to the `closeApps.map`.
+- [x] **S3.** `main.js:598` strips `'` from app names before passing to close.jxa. No shell layer (execFile argv), so this is pure corruption — `"Pat's Tools"` becomes `"Pats Tools"` and `Application(…)` won't match. Delete the `.replace(/'/g, '')`.
+- [ ] **S4.** `electron/storage.js:37` `writeFileSync` is non-atomic. Mid-write crash leaves invalid JSON; `load()` then backs up and resets to `[]`, so the UI shows empty workflows. Fix: write to a temp file in the same dir, then `fs.renameSync` over the original.
+- [ ] **S5.** Auto-update behavior contradicts CLAUDE.md. `main.js:448` sets `autoInstallOnAppQuit = false`, so a quit alone doesn't install; user must click the prompt (calls `quitAndInstall` via `main.js:932`). Either flip to `true` or fix the doc.
+- [x] **S6.** `run-workflow` IPC handler (`main.js:732`) skips `activeExecutionGuard`. Teardown (`:734`) and hotkey path (`:704`) both use it. Double-click on Run launches everything twice; can interleave with a teardown. Wrap `run-workflow` in the same guard.
+- [ ] **S7.** Launch failures invisible. `main.js:679` passes `() => {}` as execFile callback. An uninstalled app or JXA error produces no feedback. Minimal fix: on error, reuse the existing `workflow-warning` channel with a new type and the app name; renderer copy `"Could not open Notion."` (brand voice).
+
+### Nice-to-have
+- [ ] **N1.** License key parse: `electron/license.js:28` destructures `key.split("-")` with no length check; `scripts/val-helmActivate.ts:50` requires exactly 4 parts while `isSafeKey` (line 77) permits `-` inside the email segment. Real but rare (~0 of 15 realistic ASCII emails encode to base64url with a `-`). Fix by parsing from the right: signature = last, nonce = second-to-last, email = everything between.
+- [ ] **N2.** `hasAccessibility()` (`main.js:301`) runs `execFileSync` with 3s timeout on every run, teardown, and `get-accessibility` IPC. Blocks the tray. Convert to async `execFile`.
+- [ ] **N3.** Feedback message length unbounded. `main.js:965` checks non-empty only. Cap at ~10,000 chars before forwarding to Sentry / Resend.
+- [ ] **N4.** `main.js:359` calls `activateLicense(key)` unawaited inside the deep-link handler. If `license.save` throws, unhandled rejection. Wrap with `.catch()`.
+
+### Other verified (from "unverified" → confirmed real)
+- [ ] **U1.** `spotifyUri` is persisted at save (`main.js:822`) but `runWorkflowById` never passes it to `launch.jxa` (args end at slot 4 = profile). Captured Spotify entries reopen the app without the track. Fix: read `appTarget.spotifyUri` in the launch loop, plumb through as an additional arg, handle in `launch.jxa`.
+
+### Pending review passes
+- [x] Pass 3 — Val.town + native module (findings below).
+
+## Code-review pass 2 — renderer + JXA + state probes (verified)
+
+### Blocker
+- [x] **B3.** Capture poller silently wipes the user's mode selections + name input every 4 seconds. `public/index.html:1430` calls `renderPreview()` with no args; `renderPreview(preserveSelection = false, …)` defaults to RESET — line 1597 rebuilds `appModes` as all-open, line 1918 clears the name field. So mid-capture any new window detected by the poller wipes everything the user has clicked/typed, with no visible reason. Edit flow is worse: `openEdit` (`:2046`) reconstructs both/close/skip modes carefully, then starts the same poller (`:2079`); one new window resets the entire edit to all-open. Fix: change line 1430 to `renderPreview(true, true)` mirroring the existing call at `:2096`.
+
+### Should-fix
+- [x] **S8.** Spotify never resumes the captured track. `capture.jxa:97` emits `track.spotifyUrl()` (a `spotify:track:…` URI) as `urlToOpen`, but `SAFE_URL` (`main.js:475`) only matches `https|notion|slack|figma|obsidian` so the URI is stripped at the validator. `launch.jxa:167` then never sees it and Spotify reopens to whatever was last playing. Fix: add `spotify` to `SAFE_URL` *and* relax the `://` requirement (Spotify URIs use `spotify:track:…`, no `://`) — or use a separate URI validator for non-http schemes. Then confirm Spotify's AppleScript `spotifyUrl()` returns the URI form vs the `https://open.spotify.com/…` form on the target Mac — current `launch.jxa:167` only handles `spotify:` prefix, so an https URL would still be ignored even if it survived validation.
+- [ ] **S9.** Teardown — a Pro feature — bypassable for free. The renderer hides the Teardown button behind `isPro` (`index.html:1352`), but the mode-toggle global hotkey path doesn't gate. `registerModeToggleHotkey` (`main.js:582`) and the duplicate at `:720` both call `setTeardownMode` without an entitlement check, and `set-mode-toggle-hotkey` (`main.js:749`) lets any user bind the hotkey from Settings. A free user binds it, presses it, then every per-workflow shortcut routes through `teardownWorkflowById` at line 714 instead of `runWorkflowById`. Fix: gate `setTeardownMode(true, …)` on `isUserAuthorized()` in main where the enforcement actually matters, not just in the renderer.
+- [ ] **S10.** Slack deep-link probe reads a hard-coded LevelDB filename. `src/platform/macos/slack_state.py:10` opens `…/leveldb/000004.log`, but LevelDB rotates that number on every compaction. For most users the active log is `000005.log` or higher, the probe fails quietly, `enrichSlackApps` (`main.js:88`) swallows the empty result, and Slack falls back to the manual paste UI with no error indication. Fix: glob the directory for `*.log` and read the most-recently-modified (or highest-numbered) file.
+
+### Nice-to-have
+- [ ] **N5.** Focus mode label rendered via `innerHTML`. `index.html:1520` interpolates `currentFocusMode` into `header.innerHTML`. Source is the user's own macOS Focus list (not attacker-reachable), and contextIsolation + no nodeIntegration keep blast radius cosmetic — but a Focus named with `</` or `&` breaks the markup. Switch to `textContent` like sibling elements.
+- [ ] **N6.** Dead visibility branch. Main sends `'visible'` / `'hidden'` (`main.js:416`, `:419`); renderer at `index.html:2302` checks `state === 'shown'`, which never matches. The intended teardown-mode re-sync still happens via the `'visible'` branch below it, so nothing breaks — just misleading. Change `'shown'` → `'visible'` (or delete).
+- [ ] **N7.** Doubled call. `cancelCapture` (`index.html:2033–2034`) calls `stopCapturePoller()` twice. Idempotent, harmless, but remove one.
+- [ ] **N8.** VS Code rows lose the file glyph. `enrichCodeApps` (`main.js:69`) creates entries with `filePath` only — no `folderPath` — while the preview icon branch at `index.html:1634` keys on `a.folderPath`. Files still open; just no 📄 in the row.
+
+### Cleanup (carried from pass 1, now confirmed dead code)
+- [ ] **C1.** `spotifyUri` field at `main.js:822` is dead code — the renderer never sets it. Remove the entry from the save mapping when fixing S8.
+
+### Re-verified clean (no action needed)
+- `teardownWorkflowById` closing `workflow.apps` is intentional ("the reverse of run") per `welcome.html:185`. Distinct concept from `closeApps` (which is launch-time "close these before opening").
+- No reachable shell injection through JXA `doShellScript` paths — every interpolated value is either single-quote-escaped + validated by `isSafeString`, or a hard-coded verb.
+
+## Code-review pass 3 — Val.town handlers + native AX module (verified)
+
+### Should-fix
+- [x] **S11.** Stripe webhook duplicates mint a new valid key every retry. `scripts/val-helmCheckout.ts:161` calls `mintKey` on every `checkout.session.completed`, and `mintKey` (`:70`) uses fresh `randomBytes(4)` per call — so every delivery of the same event produces a different, independently-valid key. Stripe delivers at-least-once and retries on any non-2xx; one purchase legitimately can arrive multiple times. Each key is good for 2 machines (`val-helmActivate.ts:127`), so one purchase can yield far more than 2 activations. Fix: derive nonce deterministically from the Checkout Session id, and before minting check a blob keyed by that session id — if a key was already minted, return the same key (or just `{ok:true}`) instead of minting again.
+- [x] **S12.** No timestamp tolerance on the Stripe signature check. `verifyStripeSignature` (`val-helmCheckout.ts:49`) extracts `t` and `v1`, recomputes the HMAC, compares — but never checks `t` is recent. Stripe's own verification rejects timestamps outside a 5-minute default precisely to stop replay. Without it, anyone who once observes a valid signed `checkout.session.completed` body can resend it indefinitely; combined with S11 each replay mints another valid key. Fix: after extracting `ts`, reject if `Math.abs(Date.now()/1000 - Number(ts)) > 300`.
+- [x] **S13.** Likely root cause of "license emails unreliable" roadmap item. `val-helmCheckout.ts:136` returns `{ok:true, status:"dry_run_bypass"}` and exits before signature verification, minting, or email whenever `STRIPE_WEBHOOK_SECRET` is `""` or the placeholder. In production this converts a missing env var into a silent 200 success — Stripe sees delivery succeed, no retry, no key, no email, no error anywhere. Fix: gate the dry-run on an explicit non-production signal (e.g. `Deno.env.get("HELM_DRYRUN") === "1"`), and treat a missing secret in production as a loud 500. Verify the deployed Val.town env actually has `STRIPE_WEBHOOK_SECRET` set; if not, that's the symptom.
+
+### Nice-to-have
+- [ ] **N9.** License keys land in webhook response body and in Val.town logs. `val-helmCheckout.ts:168` returns `{ok:true, key, warning:"email_failed"}` when Resend fails — the key (a bearer credential) ends up in Stripe's webhook delivery log. `val-helmCheckout.ts:171` `console.log`s the full key when email isn't configured. Both are server-side so exposure is dashboard-only, but a credential at rest in third-party UIs is avoidable. Fix: drop `key` from the response body; log only a hash prefix or masked email, not the key.
+- [ ] **N10.** Rate limiter's time constants disagree, and the read-modify-write isn't atomic. Both handlers (`val-helmCheckout.ts:11–16`, `val-helmActivate.ts:9–14`) key the bucket on `currentHour = floor(now / 3_600_000)` while also enforcing a `WINDOW_MS = 15 min` sliding reset inside that bucket. Effective limit is "MAX_ATTEMPTS per clock-hour bucket," and a request at :59 and :00 fall in separate buckets. The two-step getJSON/setJSON is also a TOCTOU that can undercount under burst load. Acceptable for a license endpoint (not a security hole) — reconcile the two time constants so the limit means what it reads.
+
+### Native AX module (`native/profile-probe/`, `scripts/chrome-profile-probe/`)
+- [ ] **N11a.** `profile_probe.mm:38` regex `(Default|Profile [0-9]+)` matches anywhere in a window title — a page literally titled `"Profile 4 Guide"` would false-attribute. Low impact because `main.js` drives detection through the Swift `list` action + osascript titles, not this code path. Fix when consolidating.
+- [ ] **N11b.** Swift `windowProfiles` action (`scripts/chrome-profile-probe/main.swift:85`) inspects only `runningChrome.first`. Multiple Chrome processes (rare on Mac) are ignored. The `.mm` version iterates all. Low-impact.
+- [ ] **N11c.** Dead code: the Swift `windowProfiles` action has no caller — `main.js` only invokes `callProfileProbe('list')` (lines 120, 919). Aligns with the existing CLAUDE.md cleanup note about removing the superseded AX walk. Delete `windowProfiles` case from `main.swift` and the corresponding `.mm` regex block.
+
+### Cross-reference to B1
+The server-side device-limit and activation logic in `val-helmActivate.ts` is only as strong as the client's willingness to call it. `license.js` falls through to local verification when the network call fails. With the old HMAC scheme that meant: anyone with the leaked `HELM_LICENSE_SECRET` could mint locally-acceptable keys, and any user could stay offline to skip the 2-machine check entirely. Now done: rotated the secret, migrated to Ed25519 (server holds private, client only verifies), removed `HELM_LICENSE_SECRET` env from client. S11–S13 are still worth fixing — but the server-side rules now actually matter because the local fallback can no longer be forged.
+
+---
+
+## Review wrap-up — three passes complete
+
+**Blockers (3):**
+- B1 — secrets in public DMG (mostly done; rebuild + reupload 1.0.2 remaining)
+- B2 — per-profile teardown closes other profiles' tabs
+- B3 — capture poller wipes selections + name input every 4s
+
+**Should-fix (13):** S1–S13 across capture validation, persistence, profile teardown, run guards, Stripe webhook idempotency + replay tolerance + dry-run silent failure, Spotify URI, Pro-gate bypass, Slack LevelDB filename. **Patched:** S2, S3, S6, S8, S11, S12, S13. **Open:** S1, S4, S5, S7, S9, S10.
+
+**Nice-to-have (15):** N1–N11 across renderer cosmetics, dead code, AX module edges, log/response credential leakage, rate-limit time-constant mismatch.
+
+**Highest-impact first:** B1 (done locally — needs 1.0.2 reupload), B3 (one-line fix), S13 (likely cause of "license emails unreliable"), S11+S12 (Stripe replay/dup minting).

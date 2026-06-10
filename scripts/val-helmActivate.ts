@@ -1,9 +1,12 @@
 // Val.town: zyrxun/helmActivate
 // Replace the existing val body with this content.
 // Required Val.town env vars:
-//   HELM_LICENSE_SECRET  (set in Val.town environment — do not hardcode here)
+//   HELM_LICENSE_PUBLIC_KEY  (Ed25519 public key, PEM format)
+// This val only verifies signatures, so it holds the PUBLIC key only — never the
+// minting private key (that lives in helmCheckout). HMAC-based HELM_LICENSE_SECRET
+// is deprecated.
 import { blob } from "https://esm.town/v/std/blob";
-import { createHmac, createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createPublicKey, verify as cryptoVerify, KeyObject } from "node:crypto";
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 const WINDOW_MS    = 15 * 60 * 1000;
@@ -44,21 +47,18 @@ async function rateLimit(req: Request): Promise<Response | null> {
 }
 
 // ── Key verification ──────────────────────────────────────────────────────────
-function verifyKey(key: string, secret: string): { valid: boolean; email: string | null } {
+// Key format: HLM.<base64url email>.<nonce>.<base64url Ed25519 signature>.
+// '.' is not a base64url character, so split is unambiguous.
+function verifyKey(key: string, publicKey: KeyObject): { valid: boolean; email: string | null } {
   try {
-    const parts = key.split("-");
-    if (parts.length !== 4) return { valid: false, email: null };
-    const [prefix, encodedEmail, nonce, signature] = parts;
-    if (prefix !== "HLM" || !encodedEmail || nonce.length !== 8 || signature.length !== 64) {
-      return { valid: false, email: null };
-    }
-    const message  = `HLM:${encodedEmail}:${nonce}`;
-    const expected = createHmac("sha256", secret).update(message).digest("hex");
-    const isValid  = timingSafeEqual(
-      Buffer.from(signature, "hex"),
-      Buffer.from(expected,  "hex"),
-    );
-    if (!isValid) return { valid: false, email: null };
+    const parts = key.split(".");
+    if (parts.length !== 4 || parts[0] !== "HLM") return { valid: false, email: null };
+    const [, encodedEmail, nonce, signature] = parts;
+    if (!encodedEmail || !nonce || !signature) return { valid: false, email: null };
+    const message = Buffer.from(`HLM:${encodedEmail}:${nonce}`);
+    const sig     = Buffer.from(signature, "base64url");
+    const ok      = cryptoVerify(null, message, publicKey, sig);
+    if (!ok) return { valid: false, email: null };
     const email = Buffer.from(encodedEmail, "base64url").toString("utf8");
     return { valid: true, email };
   } catch {
@@ -73,8 +73,9 @@ const MACHINE_MAX   = 64;
 const BODY_SIZE_MAX = 2048; // bytes
 
 function isSafeKey(k: unknown): k is string {
+  // HLM.<base64url email>.<8 hex nonce>.<86-char base64url Ed25519 sig>.
   return typeof k === "string" && k.length >= 10 && k.length <= KEY_MAX &&
-    /^HLM-[A-Za-z0-9_-]+-[0-9a-f]{8}-[0-9a-f]{64}$/.test(k);
+    /^HLM\.[A-Za-z0-9_-]+\.[0-9a-f]{8}\.[A-Za-z0-9_-]{86}$/.test(k);
 }
 
 function isSafeMachineId(m: unknown): m is string {
@@ -95,8 +96,14 @@ export default async function(req: Request): Promise<Response> {
   const limited = await rateLimit(req);
   if (limited) return limited;
 
-  const secret = Deno.env.get("HELM_LICENSE_SECRET") ?? "";
-  if (!secret) return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
+  const publicPem = Deno.env.get("HELM_LICENSE_PUBLIC_KEY") ?? "";
+  if (!publicPem) return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
+  let publicKey: KeyObject;
+  try {
+    publicKey = createPublicKey(publicPem);
+  } catch {
+    return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
+  }
 
   let body: { key?: unknown; machineId?: unknown };
   try {
@@ -113,7 +120,7 @@ export default async function(req: Request): Promise<Response> {
   if (!isSafeKey(key))        return Response.json({ ok: false, reason: "invalid_key" }, { status: 400 });
   if (!isSafeMachineId(machineId)) return Response.json({ ok: false, reason: "invalid_machine" }, { status: 400 });
 
-  const { valid, email } = verifyKey(key, secret);
+  const { valid, email } = verifyKey(key, publicKey);
   if (!valid) return Response.json({ ok: false, reason: "invalid_key" }, { status: 403 });
 
   const activationKey = "helm_activation_" + createHash("sha256").update(key).digest("hex").slice(0, 16);

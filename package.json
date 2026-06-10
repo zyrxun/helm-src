@@ -27,7 +27,6 @@
       "electron/**/*",
       "public/**/*",
       "package.json",
-      ".env",
       "!public/**/*.mov",
       "!public/**/*.mp4",
       "!**/*.map",

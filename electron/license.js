@@ -8,8 +8,7 @@ const { app } = require("electron");
 const DIR  = path.join(app.getPath("userData"), "Helm");
 const FILE = path.join(DIR, "license.key");
 
-// Set this to your Val.town endpoint once deployed
-const ACTIVATION_ENDPOINT = process.env.HELM_ACTIVATION_ENDPOINT || null;
+const ACTIVATION_ENDPOINT = require('./runtime-config').activationEndpoint || null;
 
 function getMachineId() {
   try {
@@ -23,28 +22,34 @@ function getMachineId() {
   }
 }
 
-function validateLocalHmac(key) {
+// Verify a license key locally using the Ed25519 public key. The matching
+// private key lives only on the server (Val.town `helmActivate`), so seeing
+// this code does not let an attacker mint valid keys.
+//
+// Key format: HLM.<base64url email>.<nonce>.<base64url signature>
+// '.' is not a base64url character, so split is unambiguous.
+function verifyLocalSignature(key) {
   try {
-    const [prefix, encodedEmail, nonce, signature] = key.split("-");
-    if (prefix !== "HLM" || !encodedEmail || !nonce || !signature) return { valid: false };
-    const email    = Buffer.from(encodedEmail, "base64url").toString("utf8");
-    const secret   = process.env.HELM_LICENSE_SECRET;
-    if (!secret) return { valid: false };
-    const message  = `HLM:${encodedEmail}:${nonce}`;
-    const expected = crypto.createHmac("sha256", secret).update(message).digest("hex");
-    if (signature.length !== expected.length) return { valid: false };
-    const isValid  = crypto.timingSafeEqual(
-      Buffer.from(signature, "hex"),
-      Buffer.from(expected,  "hex")
-    );
-    return { valid: isValid, email: isValid ? email : null };
+    if (typeof key !== "string") return { valid: false };
+    const parts = key.split(".");
+    if (parts.length !== 4 || parts[0] !== "HLM") return { valid: false };
+    const [, encodedEmail, nonce, signature] = parts;
+    if (!encodedEmail || !nonce || !signature) return { valid: false };
+    const publicKeyPem = require('./runtime-config').licensePublicKey;
+    if (!publicKeyPem) return { valid: false };
+    const message  = Buffer.from(`HLM:${encodedEmail}:${nonce}`);
+    const sigBytes = Buffer.from(signature, "base64url");
+    const isValid  = crypto.verify(null, message, publicKeyPem, sigBytes);
+    if (!isValid) return { valid: false };
+    const email = Buffer.from(encodedEmail, "base64url").toString("utf8");
+    return { valid: true, email };
   } catch (e) {
     return { valid: false };
   }
 }
 
 async function activate(key) {
-  const localCheck = validateLocalHmac(key);
+  const localCheck = verifyLocalSignature(key);
   if (!localCheck.valid) return { valid: false, reason: "invalid_key" };
 
   // No endpoint configured — offline-only mode (dev / pre-deploy)
@@ -86,4 +91,4 @@ function deactivate() {
   if (fs.existsSync(FILE)) fs.unlinkSync(FILE);
 }
 
-module.exports = { getMachineId, validateLocalHmac, activate, load, save, deactivate };
+module.exports = { getMachineId, verifyLocalSignature, activate, load, save, deactivate };

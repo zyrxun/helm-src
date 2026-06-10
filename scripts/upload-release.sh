@@ -20,6 +20,9 @@ if [ -z "$R2_ACCESS_KEY_ID" ] || [ -z "$R2_SECRET_ACCESS_KEY" ] || [ -z "$R2_ACC
   exit 1
 fi
 
+# Guard: refuse to upload if the built bundle contains secrets or known sensitive patterns.
+bash "$(dirname "$0")/audit-release.sh" "$DIST"
+
 echo "Uploading Helm release to R2 bucket: $BUCKET"
 
 for file in \

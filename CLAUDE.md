@@ -147,6 +147,8 @@ Profile name resolution uses Chrome's `Local State` `profile.info_cache` (read d
 
 ## Brand System
 
+> Canonical brand doc: `public/brand/brand.md`. If anything below disagrees with it, brand.md wins.
+
 ### Colors
 | Name | Hex | Use |
 |------|-----|-----|
@@ -160,10 +162,10 @@ Profile name resolution uses Chrome's `Local State` `profile.info_cache` (read d
 | Alert | `#FF453A` | Error states |
 
 ### Typography
-- **Wordmark:** Cormorant Garamond Bold
-- **Headlines:** Inter 700–800, tight tracking
-- **UI / Body:** Inter 400–500
-- **Data / Code:** JetBrains Mono
+- **Display / Wordmark:** SF Pro Display 700, tracked −0.5px
+- **UI / Body:** SF Pro Text 400–600
+- **Data / Code:** JetBrains Mono (literal code/paths only)
+- Legacy assets in Playfair Display / Cormorant / Inter exist; regenerate to SF Pro as touched (see brand.md migration note)
 
 ### Voice Rules
 - Calm, direct, present tense
