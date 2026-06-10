@@ -93,7 +93,7 @@
 - [ ] **N4.** `main.js:359` calls `activateLicense(key)` unawaited inside the deep-link handler. If `license.save` throws, unhandled rejection. Wrap with `.catch()`.
 
 ### Other verified (from "unverified" → confirmed real)
-- [ ] **U1.** `spotifyUri` is persisted at save (`main.js:822`) but `runWorkflowById` never passes it to `launch.jxa` (args end at slot 4 = profile). Captured Spotify entries reopen the app without the track. Fix: read `appTarget.spotifyUri` in the launch loop, plumb through as an additional arg, handle in `launch.jxa`.
+- [x] **U1.** Resolved by the S8 patch: the Spotify URI now flows through the standard `urlToOpen` field (capture.jxa:100 → save mapping → run → launch.jxa:167 `playTrack`). No separate `spotifyUri` plumbing needed.
 
 ### Pending review passes
 - [x] Pass 3 — Val.town + native module (findings below).
@@ -115,7 +115,7 @@
 - [ ] **N8.** VS Code rows lose the file glyph. `enrichCodeApps` (`main.js:69`) creates entries with `filePath` only — no `folderPath` — while the preview icon branch at `index.html:1634` keys on `a.folderPath`. Files still open; just no 📄 in the row.
 
 ### Cleanup (carried from pass 1, now confirmed dead code)
-- [ ] **C1.** `spotifyUri` field at `main.js:822` is dead code — the renderer never sets it. Remove the entry from the save mapping when fixing S8.
+- [x] **C1.** Resolved by the S8 patch: the dead `spotifyUri` save-mapping entry was removed when Spotify migrated to the unified `urlToOpen` path. No orphan field in `main.js` save mapping.
 
 ### Re-verified clean (no action needed)
 - `teardownWorkflowById` closing `workflow.apps` is intentional ("the reverse of run") per `welcome.html:185`. Distinct concept from `closeApps` (which is launch-time "close these before opening").
