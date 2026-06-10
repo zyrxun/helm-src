@@ -14,9 +14,11 @@ const MAX_ATTEMPTS = 15;
 
 async function rateLimit(req: Request): Promise<Response | null> {
   const ip          = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  const currentHour = Math.floor(Date.now() / (60 * 60 * 1000));
+  // Bucket key uses the same WINDOW_MS as the in-bucket sliding reset so the
+  // two time constants agree — "MAX_ATTEMPTS per WINDOW_MS" means exactly that.
+  const windowBucket = Math.floor(Date.now() / WINDOW_MS);
   const ipHash      = createHash("sha256").update(ip).digest("hex").slice(0, 12);
-  const blobKey     = `helm_rl_${currentHour}_${ipHash}`;
+  const blobKey     = `helm_rl_${windowBucket}_${ipHash}`;
   const now         = Date.now();
 
   let record: { count: number; windowStart: number; v: number } =
@@ -44,6 +46,20 @@ async function rateLimit(req: Request): Promise<Response | null> {
   }
 
   return null;
+}
+
+// ── PEM normalization ─────────────────────────────────────────────────────────
+// Env-var UIs (Val.town included) often flatten a multi-line PEM into one line
+// or insert literal "\n" — both of which createPublicKey rejects. Rebuild a
+// canonical PEM from whatever survived, so the key loads regardless of mangling.
+function normalizePem(raw: string, label: string): string {
+  const body = String(raw)
+    .replace(/\\[nrt]/g, "")
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .replace(/[^A-Za-z0-9+/=]/g, "");
+  const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? "";
+  return `-----BEGIN ${label}-----\n${wrapped}\n-----END ${label}-----\n`;
 }
 
 // ── Key verification ──────────────────────────────────────────────────────────
@@ -100,7 +116,7 @@ export default async function(req: Request): Promise<Response> {
   if (!publicPem) return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
   let publicKey: KeyObject;
   try {
-    publicKey = createPublicKey(publicPem);
+    publicKey = createPublicKey(normalizePem(publicPem, "PUBLIC KEY"));
   } catch {
     return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
   }

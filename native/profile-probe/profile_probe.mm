@@ -35,7 +35,10 @@ Napi::Value WindowProfiles(const Napi::CallbackInfo& info) {
         //   "Profile 7 - Google Chrome" or contains "/Profile 7" somewhere.
         NSString* profileDir = nil;
         for (NSString* s in @[nsTitle ?: @"", nsDesc ?: @""]) {
-          NSRange r = [s rangeOfString:@"(Default|Profile [0-9]+)"
+          // Word-anchored so a page literally titled "Profile 4 Guide" doesn't
+          // false-attribute. Chrome's real disambiguator sits adjacent to non-word
+          // chars (en-dash, slash, parens).
+          NSRange r = [s rangeOfString:@"\\b(Default|Profile [0-9]+)\\b"
                                options:NSRegularExpressionSearch];
           if (r.location != NSNotFound) {
             profileDir = [s substringWithRange:r];

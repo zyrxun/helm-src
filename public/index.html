@@ -1517,10 +1517,14 @@
 
     const header = document.createElement('div');
     header.className = 'focus-list-header';
-    header.innerHTML = `
-      <div class="focus-list-icon">⌁</div>
-      <span class="focus-list-label">${currentFocusMode ? 'Focus: ' + currentFocusMode : 'Focus mode'}</span>
-      <span class="focus-list-chevron">▾</span>`;
+    const hIcon = document.createElement('div');
+    hIcon.className = 'focus-list-icon'; hIcon.textContent = '⌁';
+    const hLabel = document.createElement('span');
+    hLabel.className = 'focus-list-label';
+    hLabel.textContent = currentFocusMode ? 'Focus: ' + currentFocusMode : 'Focus mode';
+    const hChev = document.createElement('span');
+    hChev.className = 'focus-list-chevron'; hChev.textContent = '▾';
+    header.append(hIcon, hLabel, hChev);
 
     const opts = document.createElement('div');
     opts.className = 'focus-options';
@@ -2033,7 +2037,6 @@
   function cancelCapture() {
     captureGen++; // invalidate any in-flight captureState promise
     stopCapturePoller();
-    stopCapturePoller();
     capturedApps = [];
     appModes = new Map();
     editingWorkflowId = null;
@@ -2301,7 +2304,7 @@
     window.api.onWindowVisibility(async state => {
       currentVisibility = state;
       applyWheelState();
-      if (state === 'shown') window.api.getTeardownMode().then(on => setModeUI(on));
+      if (state === 'visible') window.api.getTeardownMode().then(on => setModeUI(on));
       // Re-check accessibility on every show so granting permission is reflected immediately
       if (state === 'visible') {
         const hasA11y = await window.api.getAccessibility();

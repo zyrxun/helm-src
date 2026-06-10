@@ -72,7 +72,7 @@ function enrichCodeApps(apps) {
         if (!Array.isArray(files) || files.length === 0) return resolve(apps);
         // Replace the single Code stub with one entry per open file
         const withoutCode = apps.filter(a => a.name !== 'Code');
-        const codeEntries = files.map(f => ({ name: 'Code', filePath: f.filePath, label: f.label }));
+        const codeEntries = files.map(f => ({ name: 'Code', filePath: f.filePath, folderPath: f.filePath, label: f.label }));
         resolve([...withoutCode, ...codeEntries]);
       } catch(e) {
         resolve(apps);
@@ -304,19 +304,22 @@ function createTrayIcon() {
   return merged;
 }
 
+// 30s cache so a tight burst of run/teardown/get-accessibility IPCs doesn't
+// run a 3s blocking osascript on every call and freeze the tray.
+let _axCache = { result: null, at: 0 };
 function hasAccessibility() {
-  // isTrustedAccessibilityClient is unreliable for unsigned apps — it checks
-  // code signatures and returns false even when TCC has granted access.
-  // Instead, attempt an actual accessibility API call and treat success as granted.
+  const now = Date.now();
+  if (_axCache.result !== null && now - _axCache.at < 30_000) return _axCache.result;
+  let result = false;
   try {
     const { execFileSync } = require('child_process');
     execFileSync('osascript', ['-l', 'JavaScript', '-e',
       'Application("System Events").processes.whose({backgroundOnly:false}).name()'],
       { timeout: 3000, stdio: 'pipe' });
-    return true;
-  } catch (e) {
-    return false;
-  }
+    result = true;
+  } catch (e) {}
+  _axCache = { result, at: now };
+  return result;
 }
 
 function requestAccessibility() {
@@ -362,7 +365,9 @@ app.on('open-url', (event, url) => {
   try {
     const u   = new URL(url);
     const key = u.searchParams.get('key');
-    if (u.hostname === 'activate' && key) activateLicense(key);
+    if (u.hostname === 'activate' && key) {
+      activateLicense(key).catch(err => console.error('[deep-link] activate failed:', err));
+    }
   } catch (e) { /* malformed URL */ }
 });
 
@@ -989,6 +994,7 @@ ipcMain.handle('deactivate-license', () => {
 
 ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
   if (typeof message !== 'string' || message.trim().length === 0) return { ok: false };
+  message = message.slice(0, 10_000);
 
   const os = require('os');
   const fs = require('fs');

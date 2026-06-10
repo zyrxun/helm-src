@@ -13,9 +13,11 @@ const MAX_ATTEMPTS = 15;
 
 async function rateLimit(req: Request): Promise<Response | null> {
   const ip          = req.headers.get("x-forwarded-for")?.split(",")[0].trim() ?? "unknown";
-  const currentHour = Math.floor(Date.now() / (60 * 60 * 1000));
+  // Bucket key uses the same WINDOW_MS as the in-bucket sliding reset so the
+  // two time constants agree — "MAX_ATTEMPTS per WINDOW_MS" means exactly that.
+  const windowBucket = Math.floor(Date.now() / WINDOW_MS);
   const ipHash      = createHash("sha256").update(ip).digest("hex").slice(0, 12);
-  const blobKey     = `helm_rl_${currentHour}_${ipHash}`;
+  const blobKey     = `helm_rl_${windowBucket}_${ipHash}`;
   const now         = Date.now();
 
   let record: { count: number; windowStart: number; v: number } =
@@ -43,6 +45,19 @@ async function rateLimit(req: Request): Promise<Response | null> {
   }
 
   return null;
+}
+
+// ── PEM normalization ─────────────────────────────────────────────────────────
+// Env-var UIs often flatten a multi-line PEM into one line or insert literal
+// "\n"; rebuild a canonical PEM so createPrivateKey accepts it regardless.
+function normalizePem(raw: string, label: string): string {
+  const body = String(raw)
+    .replace(/\\[nrt]/g, "")
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .replace(/[^A-Za-z0-9+/=]/g, "");
+  const wrapped = body.match(/.{1,64}/g)?.join("\n") ?? "";
+  return `-----BEGIN ${label}-----\n${wrapped}\n-----END ${label}-----\n`;
 }
 
 // ── Stripe webhook signature verification ─────────────────────────────────────
@@ -128,7 +143,7 @@ export default async function(req: Request): Promise<Response> {
   const fromEmail      = Deno.env.get("HELM_FROM_EMAIL")           ?? "";
   let licenseKeyObj: KeyObject | null = null;
   if (licensePrivate) {
-    try { licenseKeyObj = createPrivateKey(licensePrivate); } catch { licenseKeyObj = null; }
+    try { licenseKeyObj = createPrivateKey(normalizePem(licensePrivate, "PRIVATE KEY")); } catch { licenseKeyObj = null; }
   }
 
   const rawBody = await req.text();
@@ -189,10 +204,13 @@ export default async function(req: Request): Promise<Response> {
       await sendLicenseEmail(email, key, resendKey, fromEmail);
     } catch (err) {
       console.error("Email delivery failed:", err);
-      return Response.json({ ok: true, key, warning: "email_failed" });
+      return Response.json({ ok: true, warning: "email_failed" });
     }
   } else {
-    console.log(`helmCheckout: email not configured, minted key for ${email}: ${key}`);
+    // Don't log the raw key — it's a bearer credential and lands in Val.town
+    // dashboard logs. Hash prefix + email is enough to correlate.
+    const keyHash = createHash("sha256").update(key).digest("hex").slice(0, 12);
+    console.log(`helmCheckout: email not configured, minted key for ${email} (sha256:${keyHash})`);
   }
 
   return Response.json({ ok: true });
