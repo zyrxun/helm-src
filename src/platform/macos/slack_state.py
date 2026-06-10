@@ -4,10 +4,16 @@ Reads Slack's LevelDB local storage to extract the active team ID and channel ID
 Outputs JSON: {"t": "<teamId>", "c": "<channelId>", "n": "<teamName>"}
 No API token required — reads Slack's on-disk state directly.
 """
-import subprocess, json, re, sys, os
+import subprocess, json, re, sys, os, glob
 
 home = os.path.expanduser("~")
-ldb_path = os.path.join(home, "Library/Application Support/Slack/Local Storage/leveldb/000004.log")
+ldb_dir = os.path.join(home, "Library/Application Support/Slack/Local Storage/leveldb")
+# LevelDB rotates the active log file number on compaction; pick the
+# most-recently-modified *.log so we read the live one.
+logs = glob.glob(os.path.join(ldb_dir, "*.log"))
+if not logs:
+    print(json.dumps({"error": "no leveldb logs"})); sys.exit(1)
+ldb_path = max(logs, key=os.path.getmtime)
 
 try:
     raw = subprocess.run(["strings", ldb_path], capture_output=True, text=True).stdout

@@ -34,7 +34,9 @@ function load() {
 }
 
 function save(workflows) {
-  fs.writeFileSync(FILE, JSON.stringify(workflows, null, 2));
+  const tmp = `${FILE}.tmp.${process.pid}.${Date.now()}`;
+  fs.writeFileSync(tmp, JSON.stringify(workflows, null, 2));
+  fs.renameSync(tmp, FILE);
 }
 
 module.exports = { load, save };

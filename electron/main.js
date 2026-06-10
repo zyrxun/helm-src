@@ -451,7 +451,7 @@ app.whenReady().then(async () => {
       url: 'https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev',
     });
     autoUpdater.autoDownload = true;
-    autoUpdater.autoInstallOnAppQuit = false;
+    autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on('update-available', (info) => {
       if (win && !win.webContents.isDestroyed()) {
         win.webContents.send('update-available', { version: info.version });
@@ -526,7 +526,7 @@ function validateWorkflow(w) {
       const a = w.closeApps[i];
       const at = (f) => ({ ok: false, field: f, index: i, appName: a && a.name });
       if (!a || typeof a !== 'object')              return at('closeApp');
-      if (!isSafeString(a.name, 128))               return at('closeApp.name');
+      if (!isSafeDisplayString(a.name, 128))        return at('closeApp.name');
       if (a.urlToOpen !== undefined && !isSafeUrl(a.urlToOpen)) return at('closeApp.urlToOpen');
     }
   }
@@ -572,7 +572,11 @@ function updateTrayModeIndicator() {
 }
 
 function setTeardownMode(on, broadcast) {
-  isTeardownModeActive = !!on;
+  // Teardown is a Pro feature. The renderer hides the UI behind isPro, but the
+  // hotkey + IPC paths reach here too — gate enforcement at the source so a
+  // free user can't toggle into teardown by binding the mode-toggle shortcut.
+  const next = !!on && (!on || isUserAuthorized());
+  isTeardownModeActive = next;
   updateTrayModeIndicator();
   if (broadcast && win && !win.webContents.isDestroyed()) {
     win.webContents.send('mode-changed', isTeardownModeActive);
@@ -599,7 +603,7 @@ async function teardownWorkflowById(workflowId) {
   const workflow  = workflows.find(w => w.id === workflowId);
   if (!workflow) return { ok: false, error: 'Workflow not found' };
   const targets = (workflow.apps || [])
-    .filter(a => a && isSafeString(a.name, 128))
+    .filter(a => a && isSafeDisplayString(a.name, 128))
     .map(a => ({
       name: a.name,
       urlToOpen: a.urlToOpen,
@@ -660,7 +664,7 @@ async function runWorkflowById(workflowId) {
 
   // 1. Close apps — fully resolved before any launch begins
   if (Array.isArray(workflow.closeApps) && workflow.closeApps.length > 0) {
-    const closeTargets = workflow.closeApps.filter(a => a && isSafeString(a.name, 128));
+    const closeTargets = workflow.closeApps.filter(a => a && isSafeDisplayString(a.name, 128));
     await Promise.all(closeTargets.map(closeTarget =>
       new Promise(resolve => {
         const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), closeTarget.name];
@@ -672,7 +676,7 @@ async function runWorkflowById(workflowId) {
 
   // 2. Open apps
   workflow.apps.forEach(appTarget => {
-    if (!isSafeString(appTarget.name, 128)) return;
+    if (!isSafeDisplayString(appTarget.name, 128)) return;
     const url = appTarget.folderPath
       ? appTarget.folderPath
       : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
@@ -683,7 +687,14 @@ async function runWorkflowById(workflowId) {
     // Always push slot 3 so slot 4 (profile) stays positionally stable.
     if (fp || profile) args.push(fp);
     if (profile) args.push(profile);
-    execFile('osascript', args, { maxBuffer: 1024 * 1024 * 10 }, () => {});
+    execFile('osascript', args, { maxBuffer: 1024 * 1024 * 10 }, (err) => {
+      if (err && win && !win.webContents.isDestroyed()) {
+        win.webContents.send('workflow-warning', {
+          type: 'LAUNCH_FAILED',
+          appName: appTarget.name,
+        });
+      }
+    });
   });
 
   // 3. Trigger Focus mode concurrently — non-zero exit sends warning to renderer
