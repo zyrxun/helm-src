@@ -66,8 +66,9 @@ workflow-orchestrator/
 │   ├── render-icon.js            # Icon rasterizer
 │   ├── make-dmg-bg.py            # DMG background image
 │   ├── generate-key.js           # License signing key generator
-│   ├── val-helmCheckout.ts       # Val.town Stripe checkout handler
-│   └── val-helmActivate.ts       # Val.town license activation handler
+│   ├── val-helmCheckout.ts       # Val.town Stripe webhook handler (mints + emails license keys)
+│   ├── val-helmActivate.ts       # Val.town license activation handler
+│   └── val-helmFeedback.ts       # Val.town in-app feedback relay
 ├── dist/                    # Build output: universal DMG + zip + blockmaps + latest-mac.yml (gitignored)
 ├── CLAUDE.md                # This file
 ├── package.json             # electron-builder config in `build` key
@@ -123,8 +124,8 @@ Profile name resolution uses Chrome's `Local State` `profile.info_cache` (read d
 
 ### 5. License / payments
 1. User clicks "Upgrade" → opens Stripe Checkout URL (Val.town `helmCheckout`).
-2. Stripe webhook hits Val.town `helmActivate` → signs a license payload with `HELM_LICENSE_SECRET` → emails via Resend.
-3. User pastes key into Helm → `license.js` verifies signature → stores in app userData.
+2. Stripe webhook hits Val.town `helmCheckout` → signs a license payload with Ed25519 (`HELM_LICENSE_PRIVATE_KEY`, Val.town-only) → emails via Resend.
+3. User pastes key into Helm → `license.js` verifies the Ed25519 signature with the public key embedded in `electron/runtime-config.js` → stores in app userData. `helmActivate` re-verifies server-side with its own `HELM_LICENSE_PUBLIC_KEY` env (least privilege: minter and verifier each hold only what they need).
 
 ### 6. Auto-update
 1. `electron-updater` polls `latest-mac.yml` from R2 on launch.
@@ -162,10 +163,11 @@ Profile name resolution uses Chrome's `Local State` `profile.info_cache` (read d
 | Alert | `#FF453A` | Error states |
 
 ### Typography
-- **Display / Wordmark:** SF Pro Display 700, tracked −0.5px
-- **UI / Body:** SF Pro Text 400–600
-- **Data / Code:** JetBrains Mono (literal code/paths only)
-- Legacy assets in Playfair Display / Cormorant / Inter exist; regenerate to SF Pro as touched (see brand.md migration note)
+- **Display / Wordmark:** Playfair Display 700, letter-spacing 0.06em
+- **Headlines:** Inter 700–800, tight tracking
+- **UI / Body:** Inter 400–600
+- **Data / Code:** JetBrains Mono
+- Canonical = live site (get-helm.app tokens.css). Bundled Cormorant in `public/fonts/` is legacy; swap to Playfair when next touched.
 
 ### Voice Rules
 - Calm, direct, present tense
@@ -236,7 +238,9 @@ R2_ACCOUNT_ID=…
 R2_ACCESS_KEY_ID=…
 R2_SECRET_ACCESS_KEY=…
 SENTRY_DSN=…                        # for crash reporting in the build
-HELM_LICENSE_SECRET=…               # signing key for licenses (also set in Val.town)
+# License signing: Ed25519 keypair. Private key lives ONLY in Val.town (helmCheckout
+# env HELM_LICENSE_PRIVATE_KEY) + local .secrets/helm-license-private.pem; public key
+# is shipped in electron/runtime-config.js and set as HELM_LICENSE_PUBLIC_KEY on helmActivate.
 HELM_STRIPE_URL=…                   # Stripe Checkout link
 HELM_FEEDBACK_EMAIL=…               # in-app feedback destination
 RESEND_API_KEY=…                    # license-email send (lives in Val.town env)
@@ -246,12 +250,14 @@ RESEND_API_KEY=…                    # license-email send (lives in Val.town en
 
 ## Roadmap (Priority Order)
 
-1. **Custom R2 domain `updates.get-helm.app`** (in progress) — replaces the rate-limited `pub-*.r2.dev` URL.
-2. **Resend API key on Val.town `helmCheckout`** — currently license emails aren't reliably sending.
-3. **Welcome popover** explaining the Chrome avatar icon + profile picker.
-4. **Stripe account out of review** so paid upgrade unblocks.
-5. **Cleanup pass:** delete dead AX-walk in `chrome_profiles.jxa` (superseded by native module).
-6. Mobile companion / pitch deck — future.
+1. **Stripe payouts paused** — account verification overdue in the Stripe dashboard; must resolve before any real purchase can pay out.
+2. **Stripe livemode switch** — new payment link + webhook secret; update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town.
+3. **Product Hunt prep** — copy, coming-soon page, hunter. Deadline June 24.
+4. **Waitlist export** — email list lives in Val.town blob storage (keys prefixed `helm_waitlist_`); never exported or counted. Repo copy of handler: `scripts/val-helmWaitlist.ts` (not deployed; live val differs).
+5. **Custom R2 domain `updates.get-helm.app`** (in progress) — replaces the rate-limited `pub-*.r2.dev` URL.
+6. **Welcome popover** explaining the Chrome avatar icon + profile picker.
+7. **Cleanup pass:** delete dead AX-walk in `chrome_profiles.jxa`; delete unused `WindowProfiles` from `native/profile-probe/profile_probe.mm` + rebuild.
+8. Mobile companion / pitch deck — future.
 
 <!-- stripe-projects-cli managed:claude-md:start -->
 look at AGENTS.md for your rules

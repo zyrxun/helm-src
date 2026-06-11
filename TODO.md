@@ -17,7 +17,7 @@
 ## Needs setup (external services)
 
 - [x] Stripe — create $9 one-time payment link, wire webhook to `helmCheckout` Val.town, update `HELM_STRIPE_URL` in `.env`
-- [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
+- [x] Resend — domain `get-helm.app` verified (founder-confirmed Jun 12); `noreply@get-helm.app` sends are safe. Remaining: end-to-end license email rides on the Stripe livemode test
 - [x] Apple Developer enrollment ($99/yr) — fill `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID` in `.env` for notarized builds
 - [x] Bundle fonts locally — replace Google Fonts CDN link in `public/index.html` with self-hosted Inter / JetBrains Mono / Playfair Display
 
@@ -41,7 +41,7 @@
 ## App size & security
 
 - [ ] Size optimization — app is currently 1.48 GB; investigate electron-builder ASAR compression, stripping unused locales (`--` extraResources), pruning devDependencies from bundle, and switching to a smaller Electron base. Target: under 200 MB.
-- [ ] Security audit — review HELM_LICENSE_SECRET exposure in packaged binary (currently readable via strings on the DMG); consider moving all HMAC validation server-side only and removing local secret from the build.
+- [ ] Security audit — full app-security review before launch; ready-to-run agent prompt at `security-review-prompt.md`. (The original HELM_LICENSE_SECRET concern is superseded by the Ed25519 migration — see B1; the audit should confirm that and sweep the rest.)
 
 ## Future features
 
@@ -55,13 +55,17 @@
 
 - [x] Cloudflare Pages — push landing page HTML to GitHub repo, connect get-helm.app as custom domain
 - [x] Email forwarding — set up hello@get-helm.app → personal Gmail in Cloudflare (free, 5 min)
-- [x] Resend domain verification — verify get-helm.app in Resend so license keys send from noreply@get-helm.app
+- [x] Resend domain verification — `get-helm.app` verified in Resend (DNS + domain verified Jun 3, founder-confirmed Jun 12); license keys send from noreply@get-helm.app
 
 ## Before public launch (needs external accounts)
 
-- [x] Stripe test mode — payment link, webhook, Val.town handler all wired and tested
+- [x] Stripe test mode — payment link, webhook, Val.town handler all wired and tested (`stripe trigger checkout.session.completed` minted + emailed a key, Jun 12)
+- [x] Activation roundtrip — installed 1.0.2 from R2, test-minted key activated cleanly (Jun 12); full chain Stripe → helmCheckout → Resend → app → helmActivate verified
+- [ ] Stripe payouts paused — account verification overdue in dashboard; must resolve before real purchases can pay out
 - [ ] Stripe livemode — switch to live keys: new payment link, new webhook secret, update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town env vars
-- [x] Resend — sign up, get API key, verify domain, set `HELM_FROM_EMAIL` in Val.town env vars so license keys are actually delivered
+- [ ] Product Hunt prep — copy, coming-soon page, hunter; deadline 2026-06-24
+- [ ] Waitlist export — dump Val.town blob keys `helm_waitlist_*` (email list never exported or counted); live val code differs from undeployed `scripts/val-helmWaitlist.ts`
+- [x] Resend — domain `get-helm.app` verified (founder-confirmed Jun 12); `noreply@get-helm.app` sends are safe. Remaining: end-to-end license email rides on the Stripe livemode test
 - [x] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [x] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)
 - [x] Website / landing page — launch and prelaunch HTML ready
@@ -69,12 +73,12 @@
 ## Code-review pass 1 — main process (verified findings, fix before launch)
 
 ### Blockers
-- [ ] **B1.** `.env` was shipped inside `app.asar`. Done: removed from `build.files`, rotated `HELM_LICENSE_SECRET` + Apple app-specific password + Resend `Helm` key (revoked), migrated license signing from HMAC → Ed25519 (server holds private key, client only verifies with embedded public key), moved feedback path behind new Val.town `helmFeedback` endpoint (deployed + tested), added `scripts/audit-release.sh` pre-upload guard wired into `scripts/upload-release.sh`, introduced `electron/runtime-config.js` for safe-to-ship constants. Additional hardening: `helmActivate` now reads `HELM_LICENSE_PUBLIC_KEY` directly (no longer derives the public key from the private — minter and verifier each hold only what they need). Remaining: rebuild + reupload 1.0.2 so the no-secrets DMG supersedes the leaked 1.0.0/1.0.1.
+- [x] **B1.** `.env` was shipped inside `app.asar`. Done: removed from `build.files`, rotated `HELM_LICENSE_SECRET` + Apple app-specific password + Resend `Helm` key (revoked), migrated license signing from HMAC → Ed25519 (server holds private key, client only verifies with embedded public key), moved feedback path behind new Val.town `helmFeedback` endpoint (deployed + tested), added `scripts/audit-release.sh` pre-upload guard wired into `scripts/upload-release.sh`, introduced `electron/runtime-config.js` for safe-to-ship constants. Additional hardening: `helmActivate` now reads `HELM_LICENSE_PUBLIC_KEY` directly (no longer derives the public key from the private — minter and verifier each hold only what they need). 1.0.2 rebuilt + uploaded to R2 (Jun 11); leaked 1.0.0/1.0.1 deleted from the bucket; asar verified to contain the Ed25519 pubkey and no secrets (Jun 12).
 
 ### Lower-priority secret rotations (current beta is trusted, so low immediate risk)
 - [ ] **B1a.** Rotate `META_PAGE_ACCESS_TOKEN` at developers.facebook.com (token wasn't referenced from code yet — was waiting on marketing tooling — but is in the public DMGs).
 - [ ] **B1b.** Rotate `SENTRY_DSN` at sentry.io (optional — write-only credential, worst case is fake event spam against quota; leak risk is low).
-- [ ] **B1c.** Verify `get-helm.app` at https://resend.com/domains so feedback emails come from `noreply@get-helm.app` instead of `onboarding@resend.dev` (currently using Resend's default test sender).
+- [x] **B1c.** Verify `get-helm.app` at https://resend.com/domains — done; domain verified (DNS + domain Jun 3, founder-confirmed Jun 12). Sends from `noreply@get-helm.app` are live.
 - [x] **B2.** Per-profile teardown is broken end-to-end. `electron/main.js:622` joins matching titles with `''` but `src/platform/macos/close.jxa:29` splits on `\x1f`. Even with the join fixed, the fallback regex at `close.jxa:59` uses ` - ` (hyphen) while Chrome's disambiguator is ` – ` (en-dash). And the primary `chromeWindowProfilesViaTitle()` (`main.js:112`) reads titles via Apple Events, which return only the tab title — no profile suffix — so the map is always empty and falls into the broken fallback regardless. Result: per-profile teardown closes tabs across *all* profiles. Fix: change join to `'\x1f'`; align en-dash in close.jxa regex; switch the live title source from Apple Events to the native AX module (which does return the full suffix).
 
 ### Should-fix
