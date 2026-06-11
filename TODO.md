@@ -64,7 +64,7 @@
 - [ ] Stripe payouts paused — account verification overdue in dashboard; must resolve before real purchases can pay out
 - [ ] Stripe livemode — switch to live keys: new payment link, new webhook secret, update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town env vars
 - [ ] Product Hunt prep — copy, coming-soon page, hunter; deadline 2026-06-24
-- [ ] Waitlist export — dump Val.town blob keys `helm_waitlist_*` (email list never exported or counted); live val code differs from undeployed `scripts/val-helmWaitlist.ts`
+- [x] Waitlist export — exported 2026-06-12 to `.secrets/waitlist-export-2026-06-12.json` (gitignored, PII). Live val stores the whole list under blob key `helmWaitlist` (single array), NOT the per-email `helm_waitlist_*` scheme in the undeployed `scripts/val-helmWaitlist.ts`. 24 entries ≈ 17 real signups after removing self/test addresses
 - [x] Resend — domain `get-helm.app` verified (founder-confirmed Jun 12); `noreply@get-helm.app` sends are safe. Remaining: end-to-end license email rides on the Stripe livemode test
 - [x] Apple Developer enrollment ($99/yr) — start early, Apple verification takes 1–2 days; needed for code signing + notarization so Gatekeeper doesn't block paying customers
 - [x] Privacy policy — required before Stripe goes live (GDPR/CalOPPA, email collected at checkout)

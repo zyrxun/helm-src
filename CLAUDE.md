@@ -253,11 +253,10 @@ RESEND_API_KEY=…                    # license-email send (lives in Val.town en
 1. **Stripe payouts paused** — account verification overdue in the Stripe dashboard; must resolve before any real purchase can pay out.
 2. **Stripe livemode switch** — new payment link + webhook secret; update `HELM_STRIPE_URL` and `STRIPE_WEBHOOK_SECRET` in `.env` and Val.town.
 3. **Product Hunt prep** — copy, coming-soon page, hunter. Deadline June 24.
-4. **Waitlist export** — email list lives in Val.town blob storage (keys prefixed `helm_waitlist_`); never exported or counted. Repo copy of handler: `scripts/val-helmWaitlist.ts` (not deployed; live val differs).
-5. **Custom R2 domain `updates.get-helm.app`** (in progress) — replaces the rate-limited `pub-*.r2.dev` URL.
-6. **Welcome popover** explaining the Chrome avatar icon + profile picker.
-7. **Cleanup pass:** delete dead AX-walk in `chrome_profiles.jxa`; delete unused `WindowProfiles` from `native/profile-probe/profile_probe.mm` + rebuild.
-8. Mobile companion / pitch deck — future.
+4. **Custom R2 domain `updates.get-helm.app`** (in progress) — replaces the rate-limited `pub-*.r2.dev` URL.
+5. **Welcome popover** explaining the Chrome avatar icon + profile picker.
+6. **Cleanup pass:** delete dead AX-walk in `chrome_profiles.jxa`; delete unused `WindowProfiles` from `native/profile-probe/profile_probe.mm` + rebuild.
+7. Mobile companion / pitch deck — future.
 
 <!-- stripe-projects-cli managed:claude-md:start -->
 look at AGENTS.md for your rules
