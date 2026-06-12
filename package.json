@@ -83,6 +83,7 @@
       ]
     },
     "afterSign": "scripts/notarize.js",
+    "afterAllArtifactBuild": "scripts/after-artifact-build.js",
     "extraResources": [
       {
         "from": "src/platform/macos",

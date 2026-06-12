@@ -190,18 +190,32 @@ export default async function(req: Request): Promise<Response> {
     ? "helm_minted_" + createHash("sha256").update(sessionId).digest("hex").slice(0, 32)
     : null;
 
+  // Mint is idempotent (key stable per session), but email delivery is tracked
+  // separately: a transient Resend failure on the first delivery must NOT
+  // permanently block the email on retry. So a redelivery whose stored record has
+  // emailSent=false re-attempts the email with the same key.
+  let key: string;
+  let emailAlreadySent = false;
   if (mintBlobKey) {
-    const prior: { key: string } | null = await blob.getJSON(mintBlobKey);
-    if (prior?.key) return Response.json({ ok: true });
+    const prior: { key: string; emailSent?: boolean } | null = await blob.getJSON(mintBlobKey);
+    if (prior?.key) {
+      key = prior.key;
+      emailAlreadySent = prior.emailSent === true;
+    } else {
+      key = mintKey(email, licenseKeyObj);
+      // Persist before emailing so a delivery failure can't cause a re-mint on retry.
+      await blob.setJSON(mintBlobKey, { key, email, emailSent: false, at: Date.now() });
+    }
+  } else {
+    key = mintKey(email, licenseKeyObj);
   }
 
-  const key = mintKey(email, licenseKeyObj);
-  // Persist before emailing so a delivery failure can't cause a re-mint on retry.
-  if (mintBlobKey) await blob.setJSON(mintBlobKey, { key, email, at: Date.now() });
+  if (emailAlreadySent) return Response.json({ ok: true });
 
   if (resendKey && resendKey !== "re_PLACEHOLDER" && fromEmail) {
     try {
       await sendLicenseEmail(email, key, resendKey, fromEmail);
+      if (mintBlobKey) await blob.setJSON(mintBlobKey, { key, email, emailSent: true, at: Date.now() });
     } catch (err) {
       console.error("Email delivery failed:", err);
       return Response.json({ ok: true, warning: "email_failed" });

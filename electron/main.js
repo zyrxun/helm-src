@@ -14,7 +14,18 @@ if (runtimeConfig.sentryDsn) {
   Sentry.init({
     dsn: runtimeConfig.sentryDsn,
     environment: app.isPackaged ? 'production' : 'development',
-    tracesSampleRate: 1.0,
+    // Privacy: "workflows live on your machine." No perf tracing, and drop every
+    // breadcrumb so captured URLs / window titles / Chrome profile names / emails
+    // that pass through console logs never ride along on a crash event.
+    tracesSampleRate: 0,
+    beforeBreadcrumb() { return null; },
+    beforeSend(event) {
+      // Strip request context and any stray PII the SDK may attach by default.
+      delete event.request;
+      delete event.user;
+      delete event.server_name;
+      return event;
+    },
   });
 }
 const { execFile } = require('child_process');
@@ -222,11 +233,17 @@ async function buildHistoryProfileMap(urls) {
   const profileDirs = Array.from(new Set(catalog.values()));
   const chromeRoot = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
 
+  // Copy each History DB into a fresh private temp dir rather than a predictable
+  // path, so a same-user process can't pre-seed a symlink at our target filename.
+  let tmpRoot;
+  try { tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-hist-')); }
+  catch (e) { return new Map(); }
+
   const byUrl = new Map(); // url → {dir, time}
   for (const dir of profileDirs) {
     const src = path.join(chromeRoot, dir, 'History');
     if (!fs.existsSync(src)) continue;
-    const tmp = path.join(os.tmpdir(), `helm-history-${dir.replace(/\s+/g, '_')}.db`);
+    const tmp = path.join(tmpRoot, `${dir.replace(/\s+/g, '_')}.db`);
     try {
       fs.copyFileSync(src, tmp);
     } catch (e) { continue; }
@@ -236,7 +253,6 @@ async function buildHistoryProfileMap(urls) {
       execFile('/usr/bin/sqlite3', [tmp, sql], { timeout: 4000, maxBuffer: 1024 * 1024 * 4 },
         (err, stdout) => resolve(err ? '' : String(stdout)));
     });
-    try { fs.unlinkSync(tmp); } catch (_) {}
     for (const line of out.split('\n')) {
       const idx = line.indexOf('|');
       if (idx < 0) continue;
@@ -247,6 +263,8 @@ async function buildHistoryProfileMap(urls) {
       if (!prev || t > prev.time) byUrl.set(url, { dir, time: t });
     }
   }
+
+  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_) {}
 
   const flat = new Map();
   for (const [url, { dir }] of byUrl) flat.set(url, dir);
@@ -327,6 +345,17 @@ function requestAccessibility() {
   systemPreferences.isTrustedAccessibilityClient(true);
 }
 
+// Defense-in-depth: the renderer only ever loads bundled local files and routes
+// every external link through the openExternal IPC. Deny all window.open calls and
+// any navigation away from the loaded file, so a future content-injection bug can't
+// spawn windows or redirect the renderer to attacker content.
+function hardenNavigation(bw) {
+  bw.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  bw.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) event.preventDefault();
+  });
+}
+
 function getWindowPosition() {
   const trayBounds   = tray.getBounds();
   const windowBounds = win.getBounds();
@@ -366,13 +395,22 @@ app.on('open-url', (event, url) => {
     const u   = new URL(url);
     const key = u.searchParams.get('key');
     if (u.hostname === 'activate' && key) {
+      // A deep link is attacker-triggerable from any web page. Never silently
+      // overwrite an already-valid license — that would let a page swap a paying
+      // user's key for a junk/attacker key (drive-by deactivation/hijack).
+      if (isPro) {
+        if (win && !win.webContents.isDestroyed()) {
+          win.webContents.send('workflow-warning', { type: 'DEEPLINK_ACTIVATE_IGNORED' });
+        }
+        return;
+      }
       activateLicense(key).catch(err => console.error('[deep-link] activate failed:', err));
     }
   } catch (e) { /* malformed URL */ }
 });
 
 app.whenReady().then(async () => {
-  // Phase 1: fast local HMAC check — unblocks UI immediately
+  // Phase 1: fast local Ed25519 signature check — unblocks UI immediately
   const cached = license.load();
   if (cached.key) {
     const local = license.verifyLocalSignature(cached.key);
@@ -411,10 +449,12 @@ app.whenReady().then(async () => {
       backgroundThrottling: true,
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
+      sandbox: true,
     },
   });
 
   win.loadFile(path.join(__dirname, '../public/index.html'));
+  hardenNavigation(win);
   win.on('blur', () => win.hide());
 
   win.on('show', () => {
@@ -443,10 +483,12 @@ app.whenReady().then(async () => {
       backgroundColor: '#0A1628',
       webPreferences: {
         contextIsolation: true,
+        sandbox: true,
         preload: path.join(__dirname, 'preload.js'),
       },
     });
     welcome.loadFile(path.join(__dirname, '../public/welcome.html'));
+    hardenNavigation(welcome);
     welcome.show();
   }
 
@@ -477,6 +519,10 @@ app.whenReady().then(async () => {
 // ── Input validation ──────────────────────────────────────────────────────────
 
 const SAFE_STRING = /^[^\x00-\x1f\x7f"\\`$!|;&<>(){}[\]]*$/; // no shell metacharacters
+// NOTE: this validates the URL *scheme* only, not the rest of the string. It is
+// safe because every shell sink (launch.jxa) single-quote-escapes the value before
+// doShellScript. If you ever interpolate a URL into a shell without that escaping,
+// this check is NOT sufficient — escape at the sink.
 const SAFE_URL    = /^((https?|notion|slack|figma|obsidian):\/\/|spotify:[a-z]+:)/i;
 
 function isSafeString(s, maxLen = 256) {
@@ -682,8 +728,12 @@ async function runWorkflowById(workflowId) {
   // 2. Open apps
   workflow.apps.forEach(appTarget => {
     if (!isSafeDisplayString(appTarget.name, 128)) return;
-    const url = appTarget.folderPath
-      ? appTarget.folderPath
+    // Re-validate folderPath at execution like every other field — workflows.json
+    // is editable on disk, so don't trust the save-time check alone.
+    const folderPath = (appTarget.folderPath && isSafeString(appTarget.folderPath, 512))
+      ? appTarget.folderPath : '';
+    const url = folderPath
+      ? folderPath
       : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
     const args = ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url];
     const fp = (appTarget.filePath && isSafeString(appTarget.filePath, 512)) ? appTarget.filePath : '';
@@ -1017,11 +1067,11 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
     attachLogs ? `\n--- Last 50 log lines ---\n${logSnippet}` : '',
   ].join('\n');
 
+  // Feedback is delivered via the Val.town endpoint below (and the log attachment
+  // is user-consented there). Don't duplicate the body — which can contain URLs,
+  // window titles, and the user's email from the log tail — into Sentry.
   if (runtimeConfig.sentryDsn) {
-    Sentry.captureMessage(`[Feedback] ${message.trim().slice(0, 120)}`, {
-      level: 'info',
-      extra: { body },
-    });
+    Sentry.captureMessage('[Feedback] received', { level: 'info' });
   }
 
   // Forward to the Val.town feedback endpoint, which holds the Resend key

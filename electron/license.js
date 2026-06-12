@@ -69,7 +69,10 @@ async function activate(key) {
     if (res.ok && data.ok) return { valid: true, email: data.email, offline: false };
     return { valid: false, reason: data.reason || "denied" };
   } catch (err) {
-    // Network failure — approve on local HMAC, flag offline
+    // Network failure — approve on the local Ed25519 signature check, flag offline.
+    // NOTE: this is the offline-grace path. It cannot be forged (no private key
+    // client-side) but it does mean the server-side device cap is unenforceable
+    // while offline. See SECURITY_REVIEW.md SF-2 / AF-1.
     return { valid: true, email: localCheck.email, offline: true };
   }
 }

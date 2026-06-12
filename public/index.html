@@ -2236,6 +2236,10 @@
 
   let alertDismissTimer = null;
   window.api.onWorkflowWarning(({ type, mode }) => {
+    if (type === 'DEEPLINK_ACTIVATE_IGNORED') {
+      showToast('A link tried to change your license. Ignored — you are already activated.');
+      return;
+    }
     if (type !== 'FOCUS_SHORTCUT_MISSING' && type !== 'FOCUS_DISABLE_SHORTCUT_MISSING') return;
     const verb = type === 'FOCUS_DISABLE_SHORTCUT_MISSING' ? 'Disable' : 'Enable';
     const bar = document.getElementById('workflow-alert-bar');
