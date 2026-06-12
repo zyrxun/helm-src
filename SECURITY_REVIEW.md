@@ -15,12 +15,16 @@ scenario and a minimal fix. Prior-pass fixes I re-confirmed and an explicit
 
 ## Blockers
 
-> **No open blockers.** BLK-1 (below) was the only one and is **resolved** —
-> founder confirmed (2026-06-12) that the R2, Stripe, and Apple credentials that
-> shipped in the leaked `.env` have all been rotated. Residual items are
-> hardening/verification only and are tracked under Should-fix / Nice-to-have.
+> **BLK-1 reported resolved on the founder's word — NOT independently verified.**
+> On 2026-06-12 the founder stated the R2, Stripe, and Apple credentials from the
+> leaked `.env` were rotated. Credential rotation is not observable from the
+> codebase, the build, or the live endpoints, and this review did not (and should
+> not) test the leaked keys against live infra — so this status rests entirely on
+> that attestation. It is only true if "R2 rotated" specifically covered the S3
+> access key + secret used by `upload-release.sh`. Close it for real by completing
+> the dashboard checks in NTH-6/NTH-7.
 
-### BLK-1 — [RESOLVED] Release/update credentials leaked in the public 1.0.0/1.0.1 DMGs
+### BLK-1 — [RESOLVED per founder attestation, unverified] Release/update credentials leaked in the public 1.0.0/1.0.1 DMGs
 
 **Where:** `electron/main.js:454-457` (feed URL = public `pub-…r2.dev` bucket);
 `scripts/upload-release.sh:13-21` (R2 creds write to `helm-updates`). Leaked
@@ -36,7 +40,8 @@ downloaded the old DMG could have overwritten `latest-mac.yml` + the zip and pus
 an arbitrary "update" to the entire user base (the only backstop being macOS code-
 signature validation on the zip).
 
-**Resolution (founder-confirmed 2026-06-12).** R2, Stripe, and Apple credentials
+**Resolution (founder attestation 2026-06-12 — not verified by this review).**
+R2, Stripe, and Apple credentials
 from the leaked `.env` have been rotated, so the exposed values are dead. The leaked
 1.0.0/1.0.1 artifacts were already removed from the R2 bucket (B1), and the shipped
 1.0.2 asar contains no `.env`/secrets (verified this pass). The update-channel-
@@ -367,9 +372,11 @@ the popover and welcome window still load.
 
 ### Not fixed in code (and why)
 
-- **BLK-1** (leaked credentials) — **RESOLVED**: founder confirmed R2/Stripe/Apple
-  keys rotated (2026-06-12). Residual hardening only: NTH-6 (verify new R2 token is
-  write-scoped + bucket read-only) and NTH-7 (rotate Meta/Sentry).
+- **BLK-1** (leaked credentials) — reported resolved on the **founder's word**
+  (R2/Stripe/Apple rotated, 2026-06-12); **not independently verified** by this
+  review. Confirm for real via NTH-6 (new R2 token write-scoped + bucket read-only)
+  and NTH-7 (rotate Meta/Sentry). If the R2 *upload* keys specifically weren't part
+  of that rotation, the original blocker is still open.
 - **SF-1** (helmWaitlist stale deploy) — the hardened source already exists
   (`scripts/val-helmWaitlist.ts`); it must be **deployed** to Val.town. I cannot
   deploy from here.
