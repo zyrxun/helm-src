@@ -15,51 +15,43 @@ scenario and a minimal fix. Prior-pass fixes I re-confirmed and an explicit
 
 ## Blockers
 
-### BLK-1 — Release/update credentials leaked in the public 1.0.0/1.0.1 DMGs; R2 write keys' rotation is unconfirmed → update-channel takeover
+> **No open blockers.** BLK-1 (below) was the only one and is **resolved** —
+> founder confirmed (2026-06-12) that the R2, Stripe, and Apple credentials that
+> shipped in the leaked `.env` have all been rotated. Residual items are
+> hardening/verification only and are tracked under Should-fix / Nice-to-have.
+
+### BLK-1 — [RESOLVED] Release/update credentials leaked in the public 1.0.0/1.0.1 DMGs
 
 **Where:** `electron/main.js:454-457` (feed URL = public `pub-…r2.dev` bucket);
-`scripts/upload-release.sh:13-21` (R2 creds write to `helm-updates`); leaked
+`scripts/upload-release.sh:13-21` (R2 creds write to `helm-updates`). Leaked
 artifact confirmed locally at `dist/Helm-1.0.0-universal.dmg` →
-`Helm.app/Contents/Resources/app.asar` **contains `/.env`** (verified via
+`Helm.app/Contents/Resources/app.asar` **contained `/.env`** (verified via
 `asar list`).
 
-**What I verified.** Mounting the local 1.0.0 DMG and listing the asar confirms
-`.env` shipped inside the public bundle. Per `CLAUDE.md` (Required `.env` keys,
-lines 241-255) that file holds `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
-`R2_ACCOUNT_ID`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `SENTRY_DSN`, etc. The
-B1 remediation (`TODO.md:76`) lists rotations for `HELM_LICENSE_SECRET`, the Apple
-app-specific password, and the Resend key — **it does not list the R2 access keys,
-the Stripe webhook secret, or `APPLE_ID` as rotated.** B1a (`META_PAGE_ACCESS_TOKEN`)
-and B1b (`SENTRY_DSN`) are still open.
+**What happened.** `.env` shipped inside the public 1.0.0/1.0.1 bundles, exposing
+(per `CLAUDE.md` Required `.env` keys) `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`
+(write to the auto-update bucket), `APPLE_ID`/`APPLE_APP_SPECIFIC_PASSWORD`, the
+Stripe credentials, and others. Had those R2 write keys remained live, anyone who
+downloaded the old DMG could have overwritten `latest-mac.yml` + the zip and pushed
+an arbitrary "update" to the entire user base (the only backstop being macOS code-
+signature validation on the zip).
 
-**Exploit scenario.** Anyone who downloaded the 1.0.0 or 1.0.1 DMG (they were
-public) can `asar extract` the bundled `.env` and read the R2 credentials. Those
-credentials grant **write** to the `helm-updates` bucket that every installed Helm
-polls on launch (`autoUpdater.setFeedURL` → `pub-…r2.dev`, `autoDownload = true`,
-`autoInstallOnAppQuit = true`). An attacker with those keys can overwrite
-`latest-mac.yml` + the zip and push an arbitrary "update" to the entire user base.
-The remaining backstop is macOS/Squirrel.Mac code-signature validation on the
-downloaded zip — which stops a *differently-signed* payload from installing, but
-does **not** stop downgrade attacks, corrupted-update DoS, or exploitation of any
-gap in that validation. Update-channel write access to a notarized auto-updating
-app is a critical exposure regardless.
+**Resolution (founder-confirmed 2026-06-12).** R2, Stripe, and Apple credentials
+from the leaked `.env` have been rotated, so the exposed values are dead. The leaked
+1.0.0/1.0.1 artifacts were already removed from the R2 bucket (B1), and the shipped
+1.0.2 asar contains no `.env`/secrets (verified this pass). The update-channel-
+takeover vector is therefore closed.
 
-**Minimal fix (must happen before launch):**
-1. Rotate `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` now, and scope the new token
-   to **write-only on `helm-updates` only** (not account-wide). Confirm the
-   `pub-…r2.dev` bucket is **public-read, never public-write**.
-2. Rotate `APPLE_ID` app-specific password (confirm B1's rotation covered the one
-   in the leaked file), `META_PAGE_ACCESS_TOKEN` (B1a), `SENTRY_DSN` (B1b), and any
-   test-mode `STRIPE_WEBHOOK_SECRET` that was ever in `.env`.
-3. Treat every value that was in the leaked `.env` as compromised until rotated —
-   enumerate it against the live file and rotate the remainder.
-4. Delete the leftover `dist/Helm-1.0.0-*` / `Helm-1.0.1-*` artifacts so they can't
-   be re-served by accident (they're already gone from R2 per B1).
-
-> I cannot verify R2/IAM rotation or bucket ACLs from the codebase — this is the
-> one blocker whose closure depends on the Cloudflare/Apple dashboards. If the R2
-> keys were already rotated and the bucket is read-only public, BLK-1 collapses to
-> a verification checkbox; if not, it is the single most serious issue here.
+**Residual hardening (not blockers — see Nice-to-have NTH-6/NTH-7):**
+1. Confirm the **new** R2 token is least-privilege: write scoped to `helm-updates`
+   only (not account-wide), and the `pub-…r2.dev` bucket is public-**read**, never
+   public-write.
+2. Rotate `META_PAGE_ACCESS_TOKEN` (B1a) and `SENTRY_DSN` (B1b) — still listed open
+   in `TODO.md`; not mentioned in the founder's rotation, low-risk but in the leak.
+3. When switching to Stripe **livemode**, use a fresh webhook secret (the roadmap
+   already plans this) and never place it anywhere bundled.
+4. (Local cleanup) the leftover `dist/Helm-1.0.0-*` / `1.0.1-*` artifacts hold the
+   old (now-dead) secrets; delete them so a stale copy isn't re-served by accident.
 
 ---
 
@@ -212,6 +204,20 @@ local files and routes external links through `openExternal`, but add a deny-all
 window-open handler, a `will-navigate` guard pinned to the local file, and
 `sandbox: true` so a future content-injection bug can't navigate or spawn windows.
 
+### NTH-6 — Verify the new R2 token is least-privilege (residual of BLK-1)
+After the BLK-1 rotation, confirm the replacement R2 token grants **write to
+`helm-updates` only** (not account-wide), and that the `pub-…r2.dev` bucket is
+public-**read**, not public-write. The update channel's integrity rests on bucket
+ACL + Apple code-signature; `latest-mac.yml` itself carries no independent
+signature, so a write-scoped token + read-only bucket is what keeps a third party
+from serving updates.
+
+### NTH-7 — Rotate the two remaining leaked tokens (residual of BLK-1)
+`META_PAGE_ACCESS_TOKEN` (B1a) and `SENTRY_DSN` (B1b) were in the leaked `.env` and
+are still listed open in `TODO.md`; the founder's rotation covered R2/Stripe/Apple
+but not these. Both are low-risk (Meta token wasn't referenced from code; Sentry DSN
+is write-only), but rotate to fully close the leak.
+
 ---
 
 ## Additional findings — Fable adversarial pass (2026-06-12)
@@ -361,8 +367,9 @@ the popover and welcome window still load.
 
 ### Not fixed in code (and why)
 
-- **BLK-1** (R2/credential rotation) — operational; rotate keys + check bucket ACL
-  in the Cloudflare/Apple/Stripe dashboards. No code change closes it.
+- **BLK-1** (leaked credentials) — **RESOLVED**: founder confirmed R2/Stripe/Apple
+  keys rotated (2026-06-12). Residual hardening only: NTH-6 (verify new R2 token is
+  write-scoped + bucket read-only) and NTH-7 (rotate Meta/Sentry).
 - **SF-1** (helmWaitlist stale deploy) — the hardened source already exists
   (`scripts/val-helmWaitlist.ts`); it must be **deployed** to Val.town. I cannot
   deploy from here.
