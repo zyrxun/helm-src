@@ -40,7 +40,7 @@
 
 ## App size & security
 
-- [ ] Size optimization — app is currently 1.48 GB; investigate electron-builder ASAR compression, stripping unused locales (`--` extraResources), pruning devDependencies from bundle, and switching to a smaller Electron base. Target: under 200 MB.
+- [x] Size optimization — done: 1.0.2 DMG is 188 MB (was 1.48 GB), under the 200 MB target. Installed universal app is ~496 MB on disk (normal for arm64+x86 Electron).
 - [ ] Security audit — full app-security review before launch; ready-to-run agent prompt at `security-review-prompt.md`. (The original HELM_LICENSE_SECRET concern is superseded by the Ed25519 migration — see B1; the audit should confirm that and sweep the rest.)
 
 ## Future features
