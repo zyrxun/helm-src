@@ -169,10 +169,16 @@ both to Sentry (`extra.body`) and to the founder's inbox. Those logs can contain
 URLs, window titles, Chrome profile labels, and the user's email — i.e. exactly the
 "workflow contents" the site says never leave the machine.
 
-**Minimal fix.** Add a `beforeSend`/`beforeBreadcrumb` scrubber that strips URLs,
-titles, profile names, and emails; disable the console breadcrumb integration; drop
-`tracesSampleRate` to `0` (no perf tracing need here); and make the privacy policy
-explicitly disclose Sentry crash reporting and that "Report a bug" attaches log
+**Status: RESOLVED — Sentry removed entirely** (commit `0724caf`): `@sentry/electron`
+is gone from `package.json` and every `Sentry.init`/`captureMessage` call was deleted
+(verified: zero `Sentry` references remain). Crash payloads can no longer carry
+workflow data because there is no crash reporter. The only residual is the in-app
+"Report a bug" flow, which attaches the last 50 log lines — user-consented, sent only
+to the founder's address via the feedback val (not an open relay). **Remaining
+action:** disclose the feedback log attachment in the privacy policy. (Original
+guidance, now moot, was:) add a `beforeSend`/`beforeBreadcrumb` scrubber; disable the
+console breadcrumb integration; drop `tracesSampleRate`; and disclose that "Report a
+bug" attaches log
 lines. Keep the log-attach checkbox (it's user-consented) but stop duplicating that
 body into Sentry silently.
 
@@ -381,7 +387,7 @@ Code changes made to the working tree (not yet built/deployed):
 | ID | Fix | File(s) |
 |----|-----|---------|
 | SF-2 | Server-issued Ed25519 activation receipts; offline Pro requires a valid unexpired receipt (rollout-gated on `receiptPublicKey`). Closes the no-edit "block the endpoint" bypass | `electron/license.js`, `electron/main.js`, `scripts/val-helmActivate.ts`, `electron/runtime-config.js`, `scripts/generate-receipt-keypair.js`, `public/index.html` |
-| SF-3 | `tracesSampleRate: 0`, drop all breadcrumbs (`beforeBreadcrumb`→null), scrub `request`/`user`/`server_name` in `beforeSend`, and stop shipping the feedback log body to Sentry | `electron/main.js` |
+| SF-3 | Superseded by full **Sentry removal** (commit `0724caf`): `@sentry/electron` dropped from deps and all init/capture calls deleted. Crash payloads can no longer carry URLs/titles/emails at all. Residual: feedback still attaches log lines (user-consented) → disclose in privacy policy | `electron/main.js`, `package.json` |
 | AF-2 | Deep-link `helm://activate` no longer silently overwrites an existing valid license; notifies the user via a toast instead | `electron/main.js`, `public/index.html` |
 | AF-5 | Chrome History copies go into a fresh `mkdtempSync` dir (no predictable `/tmp` filename), removed after use | `electron/main.js` |
 | AF-6 | `folderPath` re-validated with `isSafeString` at execution time | `electron/main.js` |
