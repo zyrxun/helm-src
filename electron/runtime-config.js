@@ -33,5 +33,7 @@ MCowBQYDK2VwAyEAg/fBpnvbCjSBfzA1dI30Ss1TWwL6ai3aQhvAXXVbeY4=
   // key as HELM_RECEIPT_PRIVATE_KEY on the helmActivate val and paste the public
   // key here. While null, the client keeps the legacy signature-only offline grace
   // (so activation keeps working until both sides are configured).
-  receiptPublicKey: null,
+  receiptPublicKey: `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEA2r0C1+CbWKEjK5OFETYi+zwdUPitS6wxSEXKBwFCkm4=
+-----END PUBLIC KEY-----`,
 };
