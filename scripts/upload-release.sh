@@ -26,7 +26,8 @@ bash "$(dirname "$0")/audit-release.sh" "$DIST"
 # Only publish the CURRENT version. The local dist/ can accumulate older builds
 # (some of which — 1.0.0/1.0.1 — shipped a bundled .env with secrets); a wildcard
 # upload would re-publish those to the public bucket. Pin to package.json version.
-VERSION="$(node -p "require('$(dirname "$0")/../package.json").version")"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+VERSION="$(node -p "require('$SCRIPT_DIR/../package.json').version")"
 if [ -z "$VERSION" ]; then
   echo "Error: could not read version from package.json"; exit 1
 fi
