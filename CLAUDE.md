@@ -146,6 +146,14 @@ Profile name resolution uses Chrome's `Local State` `profile.info_cache` (read d
 
 ---
 
+## Docs & Marketing Map
+
+> Full document map: `DOCS_MAP.md` (root). Launch/marketing work lives in
+> `marketing/` (SCHEDULE.md calendar, warmup-content.md post copy,
+> founder-technical-faq.md) and `ads/` (PH/HN/press/directory/physical copy,
+> tracked in `AD_TODO.md`). Session continuity: `handoff-notes.md`, newest
+> entry on top. All public-facing copy requires founder review before publish.
+
 ## Brand System
 
 > Canonical brand doc: `public/brand/brand.md`. If anything below disagrees with it, brand.md wins.
@@ -255,7 +263,7 @@ RESEND_API_KEY=…                    # license-email send (lives in Val.town en
 3. **Product Hunt prep** — copy, coming-soon page, hunter. Deadline June 24.
 4. **Custom R2 domain `updates.get-helm.app`** (in progress) — replaces the rate-limited `pub-*.r2.dev` URL.
 5. **Welcome popover** explaining the Chrome avatar icon + profile picker.
-6. **Cleanup pass:** delete dead AX-walk in `chrome_profiles.jxa`; delete unused `WindowProfiles` from `native/profile-probe/profile_probe.mm` + rebuild.
+6. **Cleanup pass:** done in source — AX-walk removed from `chrome_profiles.jxa` (live); `WindowProfiles` removed from `native/profile-probe/profile_probe.mm` (needs native rebuild + pack to ship).
 7. Mobile companion / pitch deck — future.
 
 <!-- stripe-projects-cli managed:claude-md:start -->

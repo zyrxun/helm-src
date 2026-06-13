@@ -23,74 +23,10 @@ function profileEntries(localState) {
   return out;
 }
 
-function escapeRegex(s) {
-  return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, "\\$&");
-}
-
 function run(argv) {
   var action = (argv && argv[0]) || "list";
-  var localState = readLocalState();
-  var profiles = profileEntries(localState);
-
   if (action === "list") {
-    return JSON.stringify(profiles);
+    return JSON.stringify(profileEntries(readLocalState()));
   }
-
-  if (action === "windowProfiles") {
-    // Returns a map: { windowTitle -> profileDir }
-    // Modern Chrome (M100+) doesn't put the profile name in the window title,
-    // so we walk the accessibility tree of each Chrome window via System Events
-    // to find the avatar/profile toolbar button. Its description/title
-    // typically contains the profile display name. Requires the host app
-    // (Helm) to have macOS Accessibility permission.
-    var map = {};
-    if (profiles.length === 0) return JSON.stringify(map);
-
-    // Match longer names before shorter ones so e.g. "Work Lab" beats "Work".
-    var sortedProfiles = profiles.slice().sort(function (a, b) {
-      return b.name.length - a.name.length;
-    });
-
-    function findProfileInElement(elem, depth) {
-      if (depth > 8) return null;
-      var hay = "";
-      try { hay += String(elem.description() || ""); } catch (e) {}
-      try { hay += " " + String(elem.title() || ""); } catch (e) {}
-      try { hay += " " + String(elem.help() || ""); } catch (e) {}
-      try { hay += " " + String(elem.value() || ""); } catch (e) {}
-      if (hay) {
-        for (var i = 0; i < sortedProfiles.length; i++) {
-          var nm = sortedProfiles[i].name;
-          if (!nm || nm.length < 2) continue;
-          if (hay.indexOf(nm) !== -1) return sortedProfiles[i].dir;
-        }
-      }
-      try {
-        var kids = elem.UIElements();
-        for (var k = 0; k < kids.length; k++) {
-          var got = findProfileInElement(kids[k], depth + 1);
-          if (got) return got;
-        }
-      } catch (e) {}
-      return null;
-    }
-
-    try {
-      var se = Application("System Events");
-      var proc = se.processes.byName("Google Chrome");
-      var seWins = proc.windows();
-      for (var w = 0; w < seWins.length; w++) {
-        try {
-          var winTitle = String(seWins[w].title() || seWins[w].name() || "");
-          if (!winTitle) continue;
-          var dir = findProfileInElement(seWins[w], 0);
-          if (dir) map[winTitle] = dir;
-        } catch (e) {}
-      }
-    } catch (e) {}
-
-    return JSON.stringify(map);
-  }
-
   return JSON.stringify({});
 }
