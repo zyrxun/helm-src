@@ -62,11 +62,18 @@ takeover vector is therefore closed.
 
 ## Should-fix
 
-### SF-1 — `helmWaitlist` live val runs stale code: stack-trace disclosure, no rate limit, shared-blob race (confirmed live)
+### SF-1 — [RESOLVED 2026-06-13] `helmWaitlist` live val ran stale code: stack-trace disclosure, no rate limit, shared-blob race
 
-**Where:** deployed val behind
+**Status: FIXED — hardened `scripts/val-helmWaitlist.ts` deployed and verified live
+(2026-06-13).** Re-probed the endpoint: malformed JSON now returns
+`{"ok":false,"reason":"bad_request"}` (no stack trace), GET → 405, invalid email →
+`invalid_email`, oversized body → 413. The stack-trace leak, missing rate limit, and
+shared-blob race are all gone. New signups use per-email blob keys (`helm_waitlist_*`);
+the old single-array list remains under the legacy key (already exported Jun 12).
+
+**Where (original):** deployed val behind
 `https://zyrxun--4209f72a5edc11f1a9731607ee4eb77e.web.val.run`; hardened
-replacement exists but is **undeployed** at `scripts/val-helmWaitlist.ts`.
+replacement at `scripts/val-helmWaitlist.ts` (now deployed).
 
 **What I verified (non-destructive probe).** A single malformed-JSON POST returns a
 raw runtime stack trace, publicly:
@@ -116,7 +123,11 @@ key. A brand-new key that the server has never seen is accepted this way too,
 because `activate()` grants Pro before any successful round-trip. This defeats both
 the device cap and the anti-sharing intent.
 
-**Status: FIXED IN CODE (rollout-gated).** Implemented server-issued, Ed25519-signed
+**Status: FIXED & LIVE (2026-06-13).** Deployed end-to-end — `helmActivate` has
+`HELM_RECEIPT_PRIVATE_KEY` set and the client ships the matching `receiptPublicKey`
+(commit `7abf013`); a real activation returned a valid receipt that verified against
+the embedded key. (Originally landed rollout-gated.) Implemented server-issued,
+Ed25519-signed
 activation receipts. The activation endpoint now returns a short-lived (60-day)
 receipt — signed with a *separate* receipt keypair — only after it has counted the
 machine against the 2-machine cap. The client (`license.js`) grants **offline** Pro
@@ -410,12 +421,14 @@ the popover and welcome window still load.
   review. Confirm for real via NTH-6 (new R2 token write-scoped + bucket read-only)
   and NTH-7 (rotate Meta/Sentry). If the R2 *upload* keys specifically weren't part
   of that rotation, the original blocker is still open.
-- **SF-1** (helmWaitlist stale deploy) — the hardened source already exists
-  (`scripts/val-helmWaitlist.ts`); it must be **deployed** to Val.town. I cannot
-  deploy from here.
-- **SF-2** — **now FIXED in code** via server-issued signed activation receipts
-  (rollout-gated; deploy steps in the SF-2 section). **AF-1** (constant client
-  `machineId`) remains a documented, accepted residual: it requires a modified
+- **SF-1** (helmWaitlist stale deploy) — **RESOLVED 2026-06-13**: hardened
+  `scripts/val-helmWaitlist.ts` deployed and verified live (no stack trace, rate
+  limit + validation active).
+- **SF-2** — **RESOLVED & LIVE 2026-06-13**: server-issued signed activation
+  receipts. `helmActivate` deployed with `HELM_RECEIPT_PRIVATE_KEY`, client embeds
+  the matching `receiptPublicKey` (commit `7abf013`); end-to-end receipt issuance +
+  signature verification confirmed against a real activation. **AF-1** (constant
+  client `machineId`) remains a documented, accepted residual: it requires a modified
   client, which can already bypass gating locally (AF-7).
 - **SF-4** (`disable-library-validation` entitlement) — removing it can break native
   module loading; needs a test build (`@electron/rebuild` + signed pack) to confirm
