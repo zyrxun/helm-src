@@ -23,13 +23,20 @@ fi
 # Guard: refuse to upload if the built bundle contains secrets or known sensitive patterns.
 bash "$(dirname "$0")/audit-release.sh" "$DIST"
 
-echo "Uploading Helm release to R2 bucket: $BUCKET"
+# Only publish the CURRENT version. The local dist/ can accumulate older builds
+# (some of which — 1.0.0/1.0.1 — shipped a bundled .env with secrets); a wildcard
+# upload would re-publish those to the public bucket. Pin to package.json version.
+VERSION="$(node -p "require('$(dirname "$0")/../package.json").version")"
+if [ -z "$VERSION" ]; then
+  echo "Error: could not read version from package.json"; exit 1
+fi
+echo "Uploading Helm v$VERSION to R2 bucket: $BUCKET"
 
 for file in \
-  "$DIST/Helm-"*"-universal.dmg" \
-  "$DIST/Helm-"*"-universal.dmg.blockmap" \
-  "$DIST/Helm-"*"-universal-mac.zip" \
-  "$DIST/Helm-"*"-universal-mac.zip.blockmap" \
+  "$DIST/Helm-${VERSION}-universal.dmg" \
+  "$DIST/Helm-${VERSION}-universal.dmg.blockmap" \
+  "$DIST/Helm-${VERSION}-universal-mac.zip" \
+  "$DIST/Helm-${VERSION}-universal-mac.zip.blockmap" \
   "$DIST/latest-mac.yml"
 do
   if ls $file 1>/dev/null 2>&1; then
