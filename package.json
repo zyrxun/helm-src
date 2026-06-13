@@ -1,7 +1,7 @@
 {
   "name": "helm",
   "productName": "Helm",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "macOS menu bar workflow orchestrator",
   "author": "zyrxun",
   "main": "electron/main.js",
