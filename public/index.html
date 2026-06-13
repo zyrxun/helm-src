@@ -2227,9 +2227,10 @@
         pendingSaveAfterUpgrade = null;
       }
     } else {
-      errEl.textContent = result.reason === 'limit_reached'
-        ? 'Device allocation limit reached (2/2). Authorization denied.'
-        : 'That key doesn\'t look right. Check for typos.';
+      errEl.textContent =
+        result.reason === 'limit_reached'      ? 'Device allocation limit reached (2/2). Authorization denied.'
+      : result.reason === 'activation_required' ? 'Connect to the internet to activate this license the first time.'
+      :                                           'That key doesn\'t look right. Check for typos.';
       errEl.classList.add('visible');
     }
   }
@@ -2285,6 +2286,9 @@
       setProState(false);
       const card = document.getElementById('license-revoked-card');
       if (card) card.style.display = 'block';
+    } else if (reason === 'activation_required') {
+      setProState(false);
+      showToast('Connect to the internet to re-activate Helm Pro.');
     }
   });
 

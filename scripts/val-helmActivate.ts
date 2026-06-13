@@ -1,12 +1,34 @@
 // Val.town: zyrxun/helmActivate
 // Replace the existing val body with this content.
 // Required Val.town env vars:
-//   HELM_LICENSE_PUBLIC_KEY  (Ed25519 public key, PEM format)
-// This val only verifies signatures, so it holds the PUBLIC key only — never the
-// minting private key (that lives in helmCheckout). HMAC-based HELM_LICENSE_SECRET
-// is deprecated.
+//   HELM_LICENSE_PUBLIC_KEY   (Ed25519 public key, PEM — verifies license keys)
+//   HELM_RECEIPT_PRIVATE_KEY  (Ed25519 private key, PEM — signs activation receipts; SF-2)
+// This val verifies license signatures (public key only — never the minting private
+// key, which lives in helmCheckout) and, on success, signs a short-lived activation
+// receipt the client needs for offline Pro. The receipt keypair is SEPARATE from the
+// license keypair: helmActivate holds the receipt *private* key and the client embeds
+// the matching receipt *public* key (runtime-config.js). If HELM_RECEIPT_PRIVATE_KEY
+// is unset, no receipt is issued (rollout-safe; the client falls back to legacy
+// offline grace until both sides are configured).
 import { blob } from "https://esm.town/v/std/blob";
-import { createHash, createPublicKey, verify as cryptoVerify, KeyObject } from "node:crypto";
+import {
+  createHash, createPublicKey, createPrivateKey,
+  verify as cryptoVerify, sign as cryptoSign, KeyObject,
+} from "node:crypto";
+
+// ── Activation receipt (SF-2) ─────────────────────────────────────────────────
+// 60-day TTL; the client refreshes it on every successful online re-verify, so a
+// machine that stays online keeps a fresh receipt and a machine offline longer than
+// the TTL must reconnect once. Format: <base64url(JSON)>.<base64url(Ed25519 sig)>.
+const RECEIPT_TTL_SEC = 60 * 24 * 60 * 60;
+function issueReceipt(keyFp: string, machineId: string, priv: KeyObject): string {
+  const payload = JSON.stringify({
+    k: keyFp, m: machineId, exp: Math.floor(Date.now() / 1000) + RECEIPT_TTL_SEC,
+  });
+  const payloadBytes = Buffer.from(payload, "utf8");
+  const sig = cryptoSign(null, payloadBytes, priv).toString("base64url");
+  return `${payloadBytes.toString("base64url")}.${sig}`;
+}
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 const WINDOW_MS    = 15 * 60 * 1000;
@@ -139,12 +161,22 @@ export default async function(req: Request): Promise<Response> {
   const { valid, email } = verifyKey(key, publicKey);
   if (!valid) return Response.json({ ok: false, reason: "invalid_key" }, { status: 403 });
 
-  const activationKey = "helm_activation_" + createHash("sha256").update(key).digest("hex").slice(0, 16);
+  // Load the receipt signing key (optional during rollout). The receipt fingerprint
+  // matches the client's keyFingerprint() = sha256(key)[:16].
+  const keyFp = createHash("sha256").update(key).digest("hex").slice(0, 16);
+  let receiptKey: KeyObject | null = null;
+  const receiptPem = Deno.env.get("HELM_RECEIPT_PRIVATE_KEY") ?? "";
+  if (receiptPem) {
+    try { receiptKey = createPrivateKey(normalizePem(receiptPem, "PRIVATE KEY")); } catch { receiptKey = null; }
+  }
+  const receiptFor = (m: string) => (receiptKey ? issueReceipt(keyFp, m, receiptKey) : undefined);
+
+  const activationKey = "helm_activation_" + keyFp;
 
   const existing: { machines: string[] } = (await blob.getJSON(activationKey)) ?? { machines: [] };
 
   if (existing.machines.includes(machineId)) {
-    return Response.json({ ok: true, email });
+    return Response.json({ ok: true, email, receipt: receiptFor(machineId) });
   }
 
   if (existing.machines.length >= 2) {
@@ -159,5 +191,5 @@ export default async function(req: Request): Promise<Response> {
   const updated = { machines: Array.from(new Set([...recheck.machines, machineId])), email };
   await blob.setJSON(activationKey, updated);
 
-  return Response.json({ ok: true, email });
+  return Response.json({ ok: true, email, receipt: receiptFor(machineId) });
 }

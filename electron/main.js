@@ -378,7 +378,9 @@ function toggleWindow() {
 async function activateLicense(key) {
   const result = await license.activate(key);
   if (result.valid) {
-    license.save(key);
+    // result.receipt: string on a fresh online activation, undefined on the
+    // offline-grace path (preserve the stored one). save() handles both.
+    license.save(key, result.receipt);
     isPro     = true;
     proEmail  = result.email;
     isOffline = result.offline || false;
@@ -413,14 +415,20 @@ app.whenReady().then(async () => {
   // Phase 1: fast local Ed25519 signature check — unblocks UI immediately
   const cached = license.load();
   if (cached.key) {
-    const local = license.verifyLocalSignature(cached.key);
-    if (local.valid) { isPro = true; proEmail = local.email; }
+    // Phase 1: local grant. With receipts enforced this requires a valid
+    // unexpired receipt; otherwise it's the legacy signature-only check.
+    const local = license.localAuthorize(cached);
+    if (local.valid) { isPro = true; proEmail = local.email; isOffline = !!local.offline; }
 
-    // Phase 2: background server re-verify — never blocks startup, fails safe
+    // Phase 2: background server re-verify — never blocks startup, fails safe.
+    // On success it refreshes the receipt; on a hard denial it downgrades.
     license.activate(cached.key).then(result => {
-      if (!result.valid && result.reason === 'limit_reached') {
+      if (result.valid && !result.offline) {
+        isPro = true; proEmail = result.email; isOffline = false;
+        license.save(cached.key, result.receipt);
+      } else if (!result.valid && (result.reason === 'limit_reached' || result.reason === 'activation_required')) {
         isPro = false; proEmail = null;
-        if (win) win.webContents.send('license-status-changed', { isPro: false, reason: 'limit_reached' });
+        if (win) win.webContents.send('license-status-changed', { isPro: false, reason: result.reason });
       }
     }).catch(() => {}); // network failures are intentionally ignored
   }

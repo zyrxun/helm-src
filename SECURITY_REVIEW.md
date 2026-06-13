@@ -116,15 +116,41 @@ key. A brand-new key that the server has never seen is accepted this way too,
 because `activate()` grants Pro before any successful round-trip. This defeats both
 the device cap and the anti-sharing intent.
 
-**Trade-off.** Offline grace is a deliberate design choice (documented), so this is
-a business-risk decision, not a code defect. For a $9 one-time product the blast
-radius is bounded.
+**Status: FIXED IN CODE (rollout-gated).** Implemented server-issued, Ed25519-signed
+activation receipts. The activation endpoint now returns a short-lived (60-day)
+receipt — signed with a *separate* receipt keypair — only after it has counted the
+machine against the 2-machine cap. The client (`license.js`) grants **offline** Pro
+only while it holds a valid, unexpired receipt bound to this key+machine; a key with
+no receipt must reach the server at least once, so the "block the endpoint and stay
+offline" bypass no longer yields Pro from a cold start. Each successful online
+re-verify refreshes the receipt (`main.js` Phase 2), so a normally-connected machine
+never notices; a machine offline beyond 60 days must reconnect once.
 
-**Minimal fix (if you want the cap to mean something).** Require at least one
-*successful* online activation before granting Pro, then persist a short-lived
-server-signed "activation receipt" and allow offline operation only while a prior
-receipt exists. New activations with no server contact should stay in a limited
-state rather than full Pro.
+This is **rollout-gated**: while `runtimeConfig.receiptPublicKey` is `null` the
+client keeps the legacy signature-only grace, so nothing breaks until the founder
+completes the deploy steps below. Round-trip + tamper/expiry/forgery rejection
+verified with an 8-case test against the real client `verifyReceipt`.
+
+Files: `electron/license.js` (receipt verify + `localAuthorize` + offline gate),
+`electron/main.js` (persist/refresh receipt, boot uses `localAuthorize`),
+`scripts/val-helmActivate.ts` (issue receipt), `electron/runtime-config.js`
+(`receiptPublicKey` slot), `scripts/generate-receipt-keypair.js` (new),
+`public/index.html` (`activation_required` UX).
+
+**Deploy steps to turn it on (founder):**
+1. `node scripts/generate-receipt-keypair.js`.
+2. Set the printed **private** key as `HELM_RECEIPT_PRIVATE_KEY` env on the
+   `helmActivate` val; redeploy the val with the new `scripts/val-helmActivate.ts`.
+3. Paste the printed **public** key into `electron/runtime-config.js`
+   `receiptPublicKey`; rebuild + ship the client.
+4. Tell existing users they must be online once on first launch after the update
+   (to obtain their first receipt). After that, offline works normally.
+
+**Residual (AF-1, separate item).** Receipts make every machine pass the server cap
+once, but the cap still counts a client-supplied `machineId`; a *modified* client
+can still pin a constant id. That's acceptable because a modified client can already
+bypass all gating locally (AF-7) — see AF-1. Receipts close the no-edit bypass,
+which is the one that mattered.
 
 ### SF-3 — Sentry + feedback can carry workflow contents/URLs/emails → contradicts the "workflows live on your machine" claim
 
@@ -354,6 +380,7 @@ Code changes made to the working tree (not yet built/deployed):
 
 | ID | Fix | File(s) |
 |----|-----|---------|
+| SF-2 | Server-issued Ed25519 activation receipts; offline Pro requires a valid unexpired receipt (rollout-gated on `receiptPublicKey`). Closes the no-edit "block the endpoint" bypass | `electron/license.js`, `electron/main.js`, `scripts/val-helmActivate.ts`, `electron/runtime-config.js`, `scripts/generate-receipt-keypair.js`, `public/index.html` |
 | SF-3 | `tracesSampleRate: 0`, drop all breadcrumbs (`beforeBreadcrumb`→null), scrub `request`/`user`/`server_name` in `beforeSend`, and stop shipping the feedback log body to Sentry | `electron/main.js` |
 | AF-2 | Deep-link `helm://activate` no longer silently overwrites an existing valid license; notifies the user via a toast instead | `electron/main.js`, `public/index.html` |
 | AF-5 | Chrome History copies go into a fresh `mkdtempSync` dir (no predictable `/tmp` filename), removed after use | `electron/main.js` |
@@ -380,9 +407,10 @@ the popover and welcome window still load.
 - **SF-1** (helmWaitlist stale deploy) — the hardened source already exists
   (`scripts/val-helmWaitlist.ts`); it must be **deployed** to Val.town. I cannot
   deploy from here.
-- **SF-2 / AF-1** (offline + client `machineId` device-cap bypass) — require a
-  server-side design change (bind activations to the Stripe purchase / signed
-  receipt). Left as documented risk to avoid shipping a half-measure.
+- **SF-2** — **now FIXED in code** via server-issued signed activation receipts
+  (rollout-gated; deploy steps in the SF-2 section). **AF-1** (constant client
+  `machineId`) remains a documented, accepted residual: it requires a modified
+  client, which can already bypass gating locally (AF-7).
 - **SF-4** (`disable-library-validation` entitlement) — removing it can break native
   module loading; needs a test build (`@electron/rebuild` + signed pack) to confirm
   first. Left for a verified build cycle.

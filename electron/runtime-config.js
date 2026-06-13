@@ -30,4 +30,12 @@ module.exports = {
   licensePublicKey: `-----BEGIN PUBLIC KEY-----
 MCowBQYDK2VwAyEAg/fBpnvbCjSBfzA1dI30Ss1TWwL6ai3aQhvAXXVbeY4=
 -----END PUBLIC KEY-----`,
+
+  // Ed25519 PUBLIC key for verifying server-issued activation receipts (SF-2).
+  // SEPARATE from the license keypair above. Leave null until you generate the
+  // receipt keypair (`node scripts/generate-receipt-keypair.js`): set the private
+  // key as HELM_RECEIPT_PRIVATE_KEY on the helmActivate val and paste the public
+  // key here. While null, the client keeps the legacy signature-only offline grace
+  // (so activation keeps working until both sides are configured).
+  receiptPublicKey: null,
 };
