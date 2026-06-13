@@ -113,7 +113,6 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
-    "@sentry/electron": "^7.13.0",
     "dotenv": "^16.0.0",
     "electron-updater": "^6.8.3",
     "profile-probe": "file:./native/profile-probe"

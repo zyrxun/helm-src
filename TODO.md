@@ -25,7 +25,7 @@
 
 - [x] Upload DMG to Google Drive / Dropbox and share download link with testers (iMessage/AirDrop for nearby testers)
 - [x] Add in-app "Report a bug" button in Settings panel — opens mailto: or Typeform so testers can send feedback without needing to find your contact
-- [x] Add Sentry crash reporting — automatically captures crashes in the background; testers don't need to do anything, you see errors in Sentry dashboard (free tier, ~10 lines for Electron)
+- [x] ~~Add Sentry crash reporting~~ — added then removed (Jun 13). Free tier exhausted; replaced by in-app "Report a bug" via helmFeedback val. Bug reports still work; uncaught crashes are no longer auto-reported.
 
 ## Auto-update (electron-updater → Cloudflare R2)
 
@@ -77,7 +77,7 @@
 
 ### Lower-priority secret rotations (current beta is trusted, so low immediate risk)
 - [ ] **B1a.** Rotate `META_PAGE_ACCESS_TOKEN` at developers.facebook.com (token wasn't referenced from code yet — was waiting on marketing tooling — but is in the public DMGs).
-- [ ] **B1b.** Rotate `SENTRY_DSN` at sentry.io (optional — write-only credential, worst case is fake event spam against quota; leak risk is low).
+- [x] **B1b.** ~~Rotate `SENTRY_DSN`~~ — moot: Sentry removed entirely from the app (Jun 13).
 - [x] **B1c.** Verify `get-helm.app` at https://resend.com/domains — done; domain verified (DNS + domain Jun 3, founder-confirmed Jun 12). Sends from `noreply@get-helm.app` are live.
 - [x] **B2.** Per-profile teardown is broken end-to-end. `electron/main.js:622` joins matching titles with `''` but `src/platform/macos/close.jxa:29` splits on `\x1f`. Even with the join fixed, the fallback regex at `close.jxa:59` uses ` - ` (hyphen) while Chrome's disambiguator is ` – ` (en-dash). And the primary `chromeWindowProfilesViaTitle()` (`main.js:112`) reads titles via Apple Events, which return only the tab title — no profile suffix — so the map is always empty and falls into the broken fallback regardless. Result: per-profile teardown closes tabs across *all* profiles. Fix: change join to `'\x1f'`; align en-dash in close.jxa regex; switch the live title source from Apple Events to the native AX module (which does return the full suffix).
 

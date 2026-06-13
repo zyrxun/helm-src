@@ -15,10 +15,6 @@ module.exports = {
   // Stripe Checkout link. Public URL.
   stripeUrl: 'https://buy.stripe.com/fZudR8fDe0YJbdK3sObQY00',
 
-  // Sentry DSN. Write-only by design per Sentry docs — embedding in clients
-  // is the standard pattern. Worst case is fake event spam against quota.
-  sentryDsn: 'https://3809bec31f69a789cc31c7ecc5448ee2@o4511476566392832.ingest.us.sentry.io/4511476572422144',
-
   // Val.town feedback endpoint. Holds RESEND_API_KEY server-side so no email
   // credentials ship in the client bundle.
   feedbackEndpoint: 'https://zyrxun--2f856d02645711f1ab1b1607ee4eb77e.web.val.run',

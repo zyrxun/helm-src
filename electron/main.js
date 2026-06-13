@@ -9,25 +9,6 @@ const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, systemPrefe
 const { autoUpdater } = require('electron-updater');
 const runtimeConfig = require('./runtime-config');
 
-const Sentry = require('@sentry/electron/main');
-if (runtimeConfig.sentryDsn) {
-  Sentry.init({
-    dsn: runtimeConfig.sentryDsn,
-    environment: app.isPackaged ? 'production' : 'development',
-    // Privacy: "workflows live on your machine." No perf tracing, and drop every
-    // breadcrumb so captured URLs / window titles / Chrome profile names / emails
-    // that pass through console logs never ride along on a crash event.
-    tracesSampleRate: 0,
-    beforeBreadcrumb() { return null; },
-    beforeSend(event) {
-      // Strip request context and any stray PII the SDK may attach by default.
-      delete event.request;
-      delete event.user;
-      delete event.server_name;
-      return event;
-    },
-  });
-}
 const { execFile } = require('child_process');
 const path    = require('path');
 
@@ -1074,13 +1055,6 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
     message.trim(),
     attachLogs ? `\n--- Last 50 log lines ---\n${logSnippet}` : '',
   ].join('\n');
-
-  // Feedback is delivered via the Val.town endpoint below (and the log attachment
-  // is user-consented there). Don't duplicate the body — which can contain URLs,
-  // window titles, and the user's email from the log tail — into Sentry.
-  if (runtimeConfig.sentryDsn) {
-    Sentry.captureMessage('[Feedback] received', { level: 'info' });
-  }
 
   // Forward to the Val.town feedback endpoint, which holds the Resend key
   // server-side. No credentials in the client bundle.

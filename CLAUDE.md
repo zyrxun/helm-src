@@ -24,7 +24,6 @@
 | Workflow / settings storage | `~/Library/Application Support/Helm/Helm/workflows.json` and `settings.json` |
 | Packaging | `electron-builder` — signed universal DMG + zip |
 | Auto-update | `electron-updater` — reads `latest-mac.yml` from R2 |
-| Crash reporting | `@sentry/electron` |
 | Distribution | Cloudflare R2 (`helm-updates` bucket) |
 | License backend | Val.town serverless (`helmCheckout`, `helmActivate`) |
 | Payments | Stripe Checkout |
@@ -245,7 +244,6 @@ APPLE_APP_SPECIFIC_PASSWORD=…       # generated at appleid.apple.com
 R2_ACCOUNT_ID=…
 R2_ACCESS_KEY_ID=…
 R2_SECRET_ACCESS_KEY=…
-SENTRY_DSN=…                        # for crash reporting in the build
 # License signing: Ed25519 keypair. Private key lives ONLY in Val.town (helmCheckout
 # env HELM_LICENSE_PRIVATE_KEY) + local .secrets/helm-license-private.pem; public key
 # is shipped in electron/runtime-config.js and set as HELM_LICENSE_PUBLIC_KEY on helmActivate.
