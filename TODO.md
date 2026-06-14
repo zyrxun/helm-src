@@ -93,7 +93,7 @@
 ### Nice-to-have
 - [x] **N1.** Resolved by the Ed25519 migration: key delimiter is now `.` (not in the base64url alphabet), so `split(".")` is unambiguous. The dash-collision concern no longer applies.
 - [x] **N2.** `hasAccessibility()` results cached for 30s so burst run/teardown/IPC traffic doesn't run a blocking osascript every call.
-- [x] **N3.** Feedback message capped at 10,000 chars before Sentry/Val forwarding.
+- [x] **N3.** Feedback message capped at 10,000 chars before Val forwarding.
 - [x] **N4.** Deep-link `activateLicense` now wrapped with `.catch()` — no unhandled rejection on save failure.
 
 ### Other verified (from "unverified" → confirmed real)

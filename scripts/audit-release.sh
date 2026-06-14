@@ -41,8 +41,8 @@ scan() {
   local desc="$1" rgx="$2"
   local hits
   # Skip node_modules — bundled deps may legitimately contain strings that
-  # happen to match our patterns (e.g. Sentry samples "re_…", cjs-module-lexer
-  # has "EAA" tokens in source). False positives here would block every release.
+  # happen to match our patterns (e.g. cjs-module-lexer has "EAA" tokens in
+  # source). False positives here would block every release.
   hits=$(grep -RlE --include='*.js' --include='*.json' --include='*.cjs' --include='*.mjs' \
     --exclude-dir=node_modules "$rgx" "$WORK" 2>/dev/null || true)
   if [ -n "$hits" ]; then
