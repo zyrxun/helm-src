@@ -9,7 +9,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 function App() {
-  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const t = TWEAK_DEFAULTS;
 
   // Apply wheel speed globally via CSS vars
   React.useEffect(() => {
@@ -32,42 +32,6 @@ function App() {
       <FAQ />
       <FinalCTA />
       <Footer />
-
-      <TweaksPanel>
-        <TweakSection label="Hero copy" />
-        <TweakText
-          label="Headline"
-          value={t.headline}
-          onChange={(v) => setTweak("headline", v)}
-        />
-        <TweakText
-          label="Subhead"
-          value={t.subhead}
-          onChange={(v) => setTweak("subhead", v)}
-          multiline
-        />
-
-        <TweakSection label="Demo" />
-        <TweakSelect
-          label="Popover state"
-          value={t.demoState}
-          options={["auto", "idle", "approach", "hover", "click", "running", "ready"]}
-          onChange={(v) => setTweak("demoState", v)}
-        />
-
-        <TweakSection label="Atmosphere" />
-        <TweakToggle
-          label="Nautical grid"
-          value={t.showGrid}
-          onChange={(v) => setTweak("showGrid", v)}
-        />
-        <TweakRadio
-          label="Wheel rotation"
-          value={t.wheelSpeed}
-          options={["calm", "standard", "brisk"]}
-          onChange={(v) => setTweak("wheelSpeed", v)}
-        />
-      </TweaksPanel>
     </div>
   );
 }

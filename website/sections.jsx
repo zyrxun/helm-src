@@ -2,6 +2,10 @@
 
 const { useState, useEffect, useRef } = React;
 
+const DOWNLOAD_URL = "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/Helm-1.0.3-universal.dmg";
+const APP_VERSION = "v1.0.3";
+const APP_SIZE = "187 MB";
+
 /* ============================================================
    Reveal-on-scroll wrapper.
    - If element is already in the viewport at mount, show after delay.
@@ -64,8 +68,8 @@ function Nav() {
         <a className="nav-link" href="#faq">FAQ</a>
       </div>
       <div className="nav-right">
-        <span className="nav-version">v0.4.2 · macOS</span>
-        <a className="btn btn-primary" href="#download">
+        <span className="nav-version">{APP_VERSION} · macOS</span>
+        <a className="btn btn-primary" href={DOWNLOAD_URL}>
           <Glyph name="download" size={14} />
           Download for Mac
         </a>
@@ -95,7 +99,7 @@ function Hero({ headline, sub, demoStage }) {
         </h1>
         <p className="hero-sub">{sub}</p>
         <div className="hero-ctas">
-          <a className="btn btn-primary btn-lg" href="#download">
+          <a className="btn btn-primary btn-lg" href={DOWNLOAD_URL}>
             <Glyph name="download" size={16} />
             Download for macOS
           </a>
@@ -107,8 +111,8 @@ function Hero({ headline, sub, demoStage }) {
         <div className="hero-spec">
           <span>macOS 13+</span>
           <span>Apple Silicon &amp; Intel</span>
-          <span>4.2 MB</span>
-          <span>Free</span>
+          <span>{APP_SIZE}</span>
+          <span>Free for 2 workflows</span>
         </div>
       </div>
       <HeroDemo forceStage={demoStage} />
@@ -410,12 +414,12 @@ function FinalCTA() {
           Take the <span className="accent">wheel.</span>
         </h2>
         <p>One click. Your entire stack is running.</p>
-        <a className="btn btn-primary btn-lg" href="#">
+        <a className="btn btn-primary btn-lg" href={DOWNLOAD_URL}>
           <Glyph name="download" size={16} />
           Download for macOS
         </a>
         <div style={{ marginTop: 28, fontFamily: "var(--font-mono)", fontSize: 11, color: "#5a7290", letterSpacing: "0.04em" }}>
-          v0.4.2 · 4.2 MB · macOS 13+ · Free
+          {APP_VERSION} · {APP_SIZE} · macOS 13+ · Free for 2 workflows · $9 unlocks all
         </div>
       </Reveal>
     </section>);
@@ -429,8 +433,8 @@ function Footer() {
   return (
     <footer className="container footer">
       <div className="footer-meta">
-        <span>~/Library/Application Support/Helm</span>
-        <span>v0.4.2</span>
+        <span>© 2026 Helm</span>
+        <span>{APP_VERSION}</span>
         <span>Built for macOS</span>
         <a href="/privacy.html" style={{ color: "#5a7290", textDecoration: "none", fontSize: 11 }}>Privacy</a>
         <a href="/terms.html" style={{ color: "#5a7290", textDecoration: "none", fontSize: 11 }}>Terms</a>
