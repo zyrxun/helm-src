@@ -441,7 +441,7 @@ function PrelaunchPage() {
             color: "#3a5068",
             letterSpacing: "0.04em",
           }}>
-            ~/Library/Application Support/Helm
+            © 2026 Helm
           </span>
           <a href="/privacy.html" style={{
             fontSize: 11,
