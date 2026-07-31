@@ -152,17 +152,20 @@ Warmth and precision. Signals that something important is happening.
 
 ## Typography
 
-- **Display / Wordmark:** SF Pro Display, weight 700, tracked −0.5px
-- **UI Labels:** SF Pro Text, weight 500–600
-- **Body / Descriptions:** SF Pro Text, weight 400, opacity 65%
+Canonical set — matches the live site at get-helm.app (`tokens.css`):
+
+| Role | Font | Weight | Notes |
+|---|---|---|---|
+| Display / Wordmark | Playfair Display | 700–900 | Wordmark at 700, `letter-spacing: 0.06em`. Gold on dark, Abyss on light. |
+| Headlines | Inter | 700–800 | Tight tracking. UI headings and hero copy. |
+| UI / Body | Inter | 400–600 | Body 400, labels 500–600. |
+| Data / Code | JetBrains Mono | 400–500 | Config paths, technical metadata, literal code. |
 
 Helm never shouts. It uses restraint and weight to command attention.
 
-> **Migration note (June 2026):** earlier assets were rendered in other faces —
-> the live website and logo lockups in Playfair Display + Inter, bundled app fonts
-> in Cormorant Garamond + Inter + JetBrains Mono. SF Pro is canonical. Regenerate
-> off-spec assets as they are next touched; keep JetBrains Mono only where
-> rendering literal code/paths.
+> **Migration note (June 2026):** older docs variously listed SF Pro and Cormorant
+> Garamond; the app still bundles Cormorant in `public/fonts/`. The live site is
+> canonical. Swap off-spec assets to Playfair/Inter as they are next touched.
 
 ---
 
@@ -199,7 +202,7 @@ Gold on Abyss Navy. Constructed from:
 
 **Primary — stacked (dark bg):**
 Mark centered above wordmark. 14px gap between bottom of mark and cap-height of
-wordmark. Wordmark in SF Pro Display 700, Sovereign Gold, tracked −0.5px.
+wordmark. Wordmark in Playfair Display 700, Sovereign Gold, `letter-spacing: 0.06em`.
 
 **Secondary — horizontal:**
 Mark left-aligned, wordmark right, vertically centred on the mark's midpoint. Gap
@@ -239,12 +242,17 @@ overlay at 5% opacity.
 ┌─ Header: "Helm" wordmark left · status dot + label right ─┐
 │  Section label: "WORKFLOWS"                                │
 │  Workflow row × N                                          │
-└─ Footer: Settings · New workflow button ──────────────────┘
+│  Mode bar: "Mode" · Launch / Teardown toggle (Pro)         │
+└─ Footer: Settings · "+ Add a workflow" (gold, → capture) ─┘
 ```
+
+"+ Add a workflow" opens the capture flow. At the free limit it shows a small
+lock icon and leads to the upgrade overlay ("Helm Pro · yours forever — no
+subscription").
 
 **Workflow row:**
 - Background: Helm Navy `#1E3A5F`, border `#2a4a70`, border-radius 10px
-- Name: medium weight, Chalk. Apps: regular 11px, Fog.
+- Name: Inter 500, Chalk. Apps: Inter 400 11px, Fog.
 - Run button: 32×32px, gold background, dark play triangle icon.
 
 **Idle state:**
@@ -274,14 +282,14 @@ for Mac" CTA right — gold background, dark text.
 
 **Hero:**
 - Eyebrow: `MACOS MENU BAR ORCHESTRATOR` — 11px, 0.14em tracking, Sovereign Gold
-- H1: "Take the wheel." — display weight 700, 52px, Chalk. "wheel." in Sovereign Gold.
-- Subhead: "One click. Your entire stack is running." — regular, 17px, Fog
+- H1: "Take the wheel." — Playfair Display 700, 52px, Chalk. "wheel." in Sovereign Gold.
+- Subhead: "One click. Your entire stack is running." — Inter 400, 17px, Fog
 - CTAs: "Download for macOS" (gold, primary) + "See workflows →" (ghost, secondary)
 - Hero UI chip: mini popover preview showing workflow pills and a run button
 
 **Features strip (3 columns):**
 - Separated by 1px Helm Navy dividers
-- Each: Tabler icon in gold, 15px bold title in Chalk, 13px regular body in `#8fa3bc`
+- Each: Tabler icon in gold, 15px Inter 700 title in Chalk, 13px Inter 400 body in `#8fa3bc`
 
 **Footer:** System metadata left (macOS version, data note) · Wordmark right.
 
@@ -291,20 +299,44 @@ for Mac" CTA right — gold background, dark text.
 
 ### Core
 - **One-click workflow launch** — a single click from the menu bar opens every app in a workflow, in order, with the correct URLs and window state.
-- **Workflows** — named stacks of apps and URLs. Add as many as you need.
+- **Capture** — Helm reads your current screen and turns it into a workflow: apps, Chrome tabs with their profile, VS Code workspace, Slack channel, open files. Build by doing, not by configuring.
+- **Teardown** *(Pro)* — the reverse move. One click closes a workflow's apps and tabs — per Chrome profile, without touching anything else.
+- **Focus mode** — clears everything that isn't the work.
+- **Chrome profile isolation** — tabs open in the right Chrome profile, detected automatically. Override with one click.
+- **Workflows** — named stacks of apps and URLs.
 - **Menu bar native** — no Dock icon, no splash screen. Helm lives where power users already look.
 - **JXA automation** — talks directly to macOS via JavaScript for Automation. Not URL schemes. Not shortcuts hacks. The real thing.
-- **Local config** — workflows are stored on your machine. Your data never leaves it.
+- **Workflows live on your machine** — stored locally, in Application Support.
 
 ### UI
 - **Idle state** — clean list of workflows, each with a gold run button.
-- **Running state** — the active workflow's run button becomes a spinning wheel. Other workflows dim. Status reads "Launching".
+- **Running state** — the active run button becomes a spinning wheel in Clearance green. Other workflows dim. Status reads "Launching".
+- **Wheel color rule** — the wheel is gold everywhere, always; it turns green only while a workflow is running.
 - **CRUD** — add, edit, delete, reorder workflows directly from the popover.
 - **System appearance** — follows macOS light/dark mode by default; user can override.
 
 > Keep this list in sync with the product. CLAUDE.md is the authority on what is
-> actually shipped (capture, teardown, focus mode, Chrome profile isolation,
-> licensing) — never promise a feature that isn't in the build.
+> actually shipped — never promise a feature that isn't in the build.
+
+---
+
+## Pricing
+
+| Tier | Price | Includes |
+|---|---|---|
+| Free | $0 | Two workflows. |
+| Pro | $9, one time | Unlimited workflows. Teardown mode. |
+
+No subscription.
+
+**Copy rules:**
+- "Free" is always qualified — "free for two workflows," never bare "Free."
+- Never call the free tier a trial. It doesn't expire.
+- The only paywall moment is the third workflow. In-app upgrade copy:
+  *"Helm is free for two workflows. Unlimited is $9. One time."*
+- Pro gates exactly two things — unlimited workflows and teardown (verified in
+  code). Don't claim more is included, and don't gate more in copy than the app
+  gates.
 
 ---
 
@@ -324,7 +356,7 @@ macOS rounded-rectangle mask. Clean and authoritative.
 
 ### Wordmark / Logo
 ```
-Logotype for "Helm". Ship's wheel mark in Sovereign Gold (#D4AF6A) paired with the wordmark "Helm" in SF Pro Display Bold, letter-spacing -0.5px, same gold color.
+Logotype for "Helm". Ship's wheel mark in Sovereign Gold (#D4AF6A) paired with the wordmark "Helm" in Playfair Display Bold, letter-spacing 0.06em, same gold color.
 Available as: stacked (mark above wordmark), horizontal (mark left, wordmark right), mark only, wordmark only.
 On dark (#0A1628): gold mark and text.
 On light (#F7F4EF): Abyss (#0A1628) mark and text.
@@ -335,8 +367,8 @@ No tagline in the lockup. Clean and precise.
 ```
 macOS menu bar popover UI for "Helm" workflow orchestrator. 320px wide.
 Background: #0A1628 (Abyss). Subtle nautical chart grid at 5% opacity.
-Header: "Helm" in SF Pro Display Bold, Sovereign Gold, left-aligned. Status indicator right.
-Workflow rows: Helm Navy (#1E3A5F) cards, 10px radius, workflow name in SF Pro Text Medium Chalk, app list in SF Pro Text 11px Fog, gold 32×32px run button with play icon.
+Header: "Helm" in Playfair Display Bold, Sovereign Gold, left-aligned. Status indicator right.
+Workflow rows: Helm Navy (#1E3A5F) cards, 10px radius, workflow name in Inter 500 Chalk, app list in Inter 400 11px Fog, gold 32×32px run button with play icon.
 Idle state: green dot "Ready", all rows full opacity, gold run buttons.
 Running state: gold dot "Launching", active row has gold border, active run button shows spinning ship's wheel mark in Clearance green (#30D158) on dark green background, other rows at 38% opacity.
 Footer: Settings link left, "+ New workflow" ghost button right in gold.
@@ -346,9 +378,9 @@ No gradients, no shadows. Flat, dark, precise.
 ### Website Landing Page
 ```
 Dark landing page for "Helm" macOS app. Background #0A1628.
-Nav: "Helm" SF Pro Display Bold gold wordmark left, center links in SF Pro Text Fog, "Download for Mac" gold CTA button right.
-Hero: nautical chart grid texture (#D4AF6A lines at 5% opacity, 34px grid) with radial vignette fading to background. Eyebrow in gold small caps. H1 "Take the wheel." in SF Pro Display Bold 52px Chalk, "wheel." in Sovereign Gold. Subhead SF Pro Text 17px Fog. Two CTA buttons. Mini popover UI chip preview.
-Features: 3-column strip, Helm Navy dividers, Tabler outline icons in gold, bold 15px Chalk titles, regular 13px #8fa3bc body.
+Nav: "Helm" Playfair Display Bold gold wordmark left, center links in Inter 400 Fog, "Download for Mac" gold CTA button right.
+Hero: nautical chart grid texture (#D4AF6A lines at 5% opacity, 34px grid) with radial vignette fading to background. Eyebrow in gold small caps. H1 "Take the wheel." in Playfair Display 52px Chalk, "wheel." in Sovereign Gold. Subhead Inter 17px Fog. Two CTA buttons. Mini popover UI chip preview.
+Features: 3-column strip, Helm Navy dividers, Tabler outline icons in gold, Inter 700 15px Chalk titles, Inter 400 13px #8fa3bc body.
 Footer: metadata in #5a7290 left, wordmark right.
 No gradients, no shadows, no bright colors outside the brand palette.
 ```
