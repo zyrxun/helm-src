@@ -980,6 +980,8 @@
   </div>
   <textarea id="feedback-text" placeholder="Describe what happened…"
     style="flex:1;min-height:120px;background:rgba(247,244,239,0.04);border:0.5px solid rgba(247,244,239,0.10);border-radius:var(--r-card);color:var(--helm-chalk);font-family:var(--font-ui);font-size:12px;padding:10px 12px;resize:none;outline:none;"></textarea>
+  <input type="email" id="feedback-email" placeholder="Your email (optional — so we can reply)"
+    style="background:rgba(247,244,239,0.04);border:0.5px solid rgba(247,244,239,0.10);border-radius:var(--r-card);color:var(--helm-chalk);font-family:var(--font-ui);font-size:12px;padding:10px 12px;outline:none;"/>
   <label style="display:flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:12px;color:var(--helm-fog);cursor:pointer;">
     <input type="checkbox" id="feedback-logs" checked style="accent-color:var(--helm-gold);"/>
     Attach last 50 lines of app log
@@ -2236,9 +2238,13 @@
   }
 
   let alertDismissTimer = null;
-  window.api.onWorkflowWarning(({ type, mode }) => {
+  window.api.onWorkflowWarning(({ type, mode, appName }) => {
     if (type === 'DEEPLINK_ACTIVATE_IGNORED') {
       showToast('A link tried to change your license. Ignored — you are already activated.');
+      return;
+    }
+    if (type === 'LAUNCH_FAILED') {
+      showToast(`Couldn't open ${appName}.`);
       return;
     }
     if (type !== 'FOCUS_SHORTCUT_MISSING' && type !== 'FOCUS_DISABLE_SHORTCUT_MISSING') return;
@@ -2395,6 +2401,7 @@
 
   function openFeedback() {
     document.getElementById('feedback-text').value = '';
+    document.getElementById('feedback-email').value = '';
     document.getElementById('feedback-status').textContent = '';
     document.getElementById('feedback-overlay').style.display = 'flex';
     document.getElementById('feedback-text').focus();
@@ -2407,12 +2414,13 @@
   async function submitFeedback() {
     const message = document.getElementById('feedback-text').value.trim();
     if (!message) return;
+    const email = document.getElementById('feedback-email').value.trim();
     const attachLogs = document.getElementById('feedback-logs').checked;
     const btn = document.getElementById('feedback-send-btn');
     const status = document.getElementById('feedback-status');
     btn.disabled = true;
     btn.textContent = 'Sending…';
-    const result = await window.api.sendFeedback({ message, attachLogs });
+    const result = await window.api.sendFeedback({ message, email, attachLogs });
     if (result.ok) {
       status.textContent = 'Received. Thank you.';
       status.style.color = 'var(--helm-green)';

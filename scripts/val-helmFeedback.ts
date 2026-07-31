@@ -37,6 +37,11 @@ function isSafeMessage(m: unknown): m is string {
   return typeof m === "string" && m.trim().length > 0 && m.length <= 10_000;
 }
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+function isSafeEmail(m: unknown): m is string {
+  return typeof m === "string" && m.length <= 254 && EMAIL_RE.test(m);
+}
+
 export default async function(req: Request): Promise<Response> {
   if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
@@ -55,7 +60,7 @@ export default async function(req: Request): Promise<Response> {
     return Response.json({ ok: false, reason: "server_misconfigured" }, { status: 500 });
   }
 
-  let body: { version?: unknown; message?: unknown; body?: unknown };
+  let body: { version?: unknown; message?: unknown; body?: unknown; email?: unknown };
   try {
     const raw = await req.text();
     if (raw.length > BODY_SIZE_MAX) {
@@ -70,14 +75,16 @@ export default async function(req: Request): Promise<Response> {
     return Response.json({ ok: false, reason: "invalid_message" }, { status: 400 });
   }
 
-  const version = typeof body.version === "string" ? body.version.slice(0, 32) : "unknown";
-  const text    = typeof body.body === "string" ? body.body.slice(0, 12_000) : (body.message as string);
-  const subject = `Helm Feedback — v${version}`;
+  const version   = typeof body.version === "string" ? body.version.slice(0, 32) : "unknown";
+  const replyTo   = isSafeEmail(body.email) ? body.email : null;
+  const bodyText  = typeof body.body === "string" ? body.body.slice(0, 12_000) : (body.message as string);
+  const text      = replyTo ? `Reply-to: ${replyTo}\n\n${bodyText}` : bodyText;
+  const subject   = `Helm Feedback — v${version}`;
 
   const res = await fetch("https://api.resend.com/emails", {
     method:  "POST",
     headers: { Authorization: `Bearer ${resendKey}`, "Content-Type": "application/json" },
-    body:    JSON.stringify({ from, to, subject, text }),
+    body:    JSON.stringify({ from, to, subject, text, ...(replyTo ? { reply_to: replyTo } : {}) }),
   });
   if (!res.ok) {
     return Response.json({ ok: false, reason: "delivery_failed" }, { status: 502 });

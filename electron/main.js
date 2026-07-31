@@ -1031,9 +1031,12 @@ ipcMain.handle('deactivate-license', () => {
   return { ok: true };
 });
 
-ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
+ipcMain.handle('send-feedback', async (_, { message, email, attachLogs }) => {
   if (typeof message !== 'string' || message.trim().length === 0) return { ok: false };
   message = message.slice(0, 10_000);
+  const replyEmail = typeof email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+    ? email.trim().slice(0, 254)
+    : '';
 
   const os = require('os');
   const fs = require('fs');
@@ -1065,6 +1068,7 @@ ipcMain.handle('send-feedback', async (_, { message, attachLogs }) => {
       const payload = JSON.stringify({
         version: app.getVersion(),
         message: message.trim(),
+        email: replyEmail,
         body,
       });
       await new Promise((resolve) => {
