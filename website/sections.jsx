@@ -2,9 +2,32 @@
 
 const { useState, useEffect, useRef } = React;
 
-const DOWNLOAD_URL = "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/Helm-1.0.3-universal.dmg";
 const APP_VERSION = "v1.0.3";
 const APP_SIZE = "187 MB";
+
+const SRC_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
+
+/**
+ * Download links point at /download, which counts the source and redirects to
+ * the current DMG (see functions/download.js). Two reasons: the version is no
+ * longer pinned in this file, and clicks become attributable by channel.
+ *
+ * If the visitor arrived carrying a campaign source (?src= or ?utm_source=),
+ * that wins over the on-page position, so a LinkedIn visitor who reads the page
+ * and then converts is still credited to LinkedIn. This only reads the URL the
+ * visitor already has — nothing is stored, no cookie, no beacon.
+ */
+function downloadHref(position) {
+  let src = position;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const inbound = (params.get("src") || params.get("utm_source") || "").trim().toLowerCase();
+    if (SRC_PATTERN.test(inbound)) src = inbound;
+  } catch (_) {
+    // Malformed querystring — fall back to the on-page position.
+  }
+  return `/download?src=${encodeURIComponent(src)}`;
+}
 
 /* ============================================================
    Reveal-on-scroll wrapper.
@@ -69,7 +92,7 @@ function Nav() {
       </div>
       <div className="nav-right">
         <span className="nav-version">{APP_VERSION} · macOS</span>
-        <a className="btn btn-primary" href={DOWNLOAD_URL}>
+        <a className="btn btn-primary" href={downloadHref("nav")}>
           <Glyph name="download" size={14} />
           Download for Mac
         </a>
@@ -99,7 +122,7 @@ function Hero({ headline, sub, demoStage }) {
         </h1>
         <p className="hero-sub">{sub}</p>
         <div className="hero-ctas">
-          <a className="btn btn-primary btn-lg" href={DOWNLOAD_URL}>
+          <a className="btn btn-primary btn-lg" href={downloadHref("hero")}>
             <Glyph name="download" size={16} />
             Download for macOS
           </a>
@@ -414,7 +437,7 @@ function FinalCTA() {
           Take the <span className="accent">wheel.</span>
         </h2>
         <p>One click. Your entire stack is running.</p>
-        <a className="btn btn-primary btn-lg" href={DOWNLOAD_URL}>
+        <a className="btn btn-primary btn-lg" href={downloadHref("cta")}>
           <Glyph name="download" size={16} />
           Download for macOS
         </a>
