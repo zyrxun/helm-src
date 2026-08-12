@@ -1,6 +1,27 @@
-# Session Handoff — 2026-08-11 (download attribution endpoint)
+# Session Handoff — 2026-08-13 (Windows port reaches real hardware)
 
 > Newest on top. Previous handoffs preserved below.
+
+Branch `windows-port` — three commits: the port itself (`27823af`), a
+verification harness (`5eb881a`), and the first fix found by running on an
+actual PC (`fcbce0e`, node-gyp hunting for Visual Studio during `npm install`).
+
+The port has now been *installed* on Windows but not yet *run*. Testing moved
+onto Richard's PC, driven by a second Claude instance working from
+`WINDOWS_TESTING.md`. That instance reports back by committing
+`WINDOWS_FINDINGS.md` to `windows-port`; read it before doing any further
+Windows work.
+
+Standing constraint through all of this: `darwin.js` is a pure relocation and
+macOS is release-blocking. The shared files (`chrome.js`, `sqlite.js`,
+`main.js`, `index.html`) are where cross-platform damage happens — one such bug
+has already been found and fixed, in `sqlite.js`, where Chrome's
+`last_visit_time` exceeded `MAX_SAFE_INTEGER` and silently disabled profile
+detection on *both* platforms.
+
+---
+
+# Session Handoff — 2026-08-11 (download attribution endpoint)
 
 ### What shipped into the repo (committed, **not deployed**)
 Built `get-helm.app/download?src=<channel>` — the fix for the attribution

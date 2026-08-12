@@ -15,6 +15,10 @@
 > the shipping revenue path, so behaviour changes there are release-blocking.
 > See `WINDOWS.md` for the capability matrix, security notes, and the list of
 > things never yet run on a real Windows machine.
+>
+> **If you are running on the Windows PC, read `WINDOWS_TESTING.md` — that is
+> your brief.** It covers what has been verified on hardware, which shared files
+> are safe to edit, and how to report findings back.
 
 ---
 
