@@ -2,10 +2,10 @@
   "targets": [
     {
       "target_name": "profile_probe",
-      # Objective-C++ against AppKit — there is nothing to build off macOS, and
-      # without this the Windows packaging run dies trying to compile a .mm.
-      # darwin.js already require()s this in a try/catch, so a missing binary
-      # is a supported state.
+      # Objective-C++ against AppKit — there is nothing to build off macOS.
+      # This condition is belt-and-braces only: on Windows node-gyp fails in
+      # configure looking for Visual Studio before it ever parses this file, so
+      # the real skip lives in install.js. Keep both.
       "conditions": [
         [ "OS!='mac'", { "type": "none", "sources": [] } ]
       ],

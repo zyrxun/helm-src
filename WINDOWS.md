@@ -172,10 +172,23 @@ The NSIS build is the auto-update path.
 run `rcedit` when stamping the icon and version resources into the Windows
 executable. Build on Windows, or in a Windows CI runner.
 
-`native/profile-probe` is macOS-only Objective-C++. Its `binding.gyp` now
-declares `type: none` off macOS, so the Windows packaging run skips it instead
-of dying trying to compile a `.mm` file. `darwin.js` already `require`s it in a
-`try`/`catch`, so an absent binary is a supported state.
+`native/profile-probe` is macOS-only Objective-C++, and getting `npm install` to
+survive on Windows takes more than a `binding.gyp` condition. node-gyp searches
+for Visual Studio during *configure*, before it parses `binding.gyp` at all, so
+a Windows install fails with `Could not find any Visual Studio installation to
+use` no matter what the gyp targets say. The skip therefore lives in
+`native/profile-probe/install.js`, which exits 0 off macOS and shells out to
+`node-gyp rebuild` on it. `binding.gyp`'s `OS!='mac'` condition is kept as
+belt-and-braces for any tool that does reach it.
+
+For the same reason `pack:win` and `release:win` pass
+`-c.npmRebuild=false`. electron-builder's rebuild step finds native modules by
+looking for `binding.gyp`, so it would walk straight into the same wall. Nothing
+Helm depends on is native on Windows, so there is nothing for it to do.
+
+`darwin.js` `require`s the module in a `try`/`catch`, so an absent binary is a
+supported state. On macOS a build failure stays loud on purpose — it silently
+disables Accessibility-based Chrome profile attribution.
 
 ---
 

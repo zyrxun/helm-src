@@ -4,7 +4,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "install": "node-gyp rebuild"
+    "install": "node install.js"
   },
   "dependencies": {
     "node-addon-api": "^7.1.0"

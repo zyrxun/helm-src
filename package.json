@@ -11,9 +11,9 @@
     "menu-bar": "npm run build-helper && tsc && electron electron/main.js",
     "menu-bar:win": "tsc && electron electron/main.js",
     "pack": "npm run build-helper && electron-builder --mac",
-    "pack:win": "tsc && electron-builder --win",
+    "pack:win": "tsc && electron-builder --win -c.npmRebuild=false",
     "release": "npm run build-helper && electron-builder --mac --publish always",
-    "release:win": "tsc && electron-builder --win --publish always",
+    "release:win": "tsc && electron-builder --win --publish always -c.npmRebuild=false",
     "build-icon": "bash scripts/build-icon.sh"
   },
   "build": {
