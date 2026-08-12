@@ -9,6 +9,13 @@
 - **Project path:** `~/claude-workspace/workflow-orchestrator/`
 - **Distribution:** signed + notarized universal DMG, hosted on Cloudflare R2, auto-updates via electron-updater
 
+> **Windows port in progress** (branch `windows-port`). All OS automation now
+> routes through `electron/platform/`, which dispatches on `process.platform`.
+> `darwin.js` is a pure relocation of the old inline `main.js` logic — macOS is
+> the shipping revenue path, so behaviour changes there are release-blocking.
+> See `WINDOWS.md` for the capability matrix, security notes, and the list of
+> things never yet run on a real Windows machine.
+
 ---
 
 ## Tech Stack

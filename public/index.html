@@ -438,6 +438,7 @@
     }
     .hotkey-pill:not(.has-hotkey) { color: rgba(212,175,106,0.35); border-style: dashed; }
     .hotkey-pill:not(.has-hotkey)::after { content: '⌘'; font-size: 10px; }
+    body.platform-win32 .hotkey-pill:not(.has-hotkey)::after { content: 'Ctrl'; font-size: 9px; }
     .hotkey-pill:hover { background: rgba(212,175,106,0.1); border-color: var(--helm-gold); }
     .hotkey-pill.capturing {
       color: #5eead4; border-color: #5eead4;
@@ -908,7 +909,7 @@
         <span id="s-mode" class="settings-val"></span>
       </div>
       <button id="s-deactivate-btn" class="deactivate-btn" onclick="deactivateLicense()">
-        Deactivate this Mac
+        Deactivate this device
       </button>
     </section>
 
@@ -918,11 +919,11 @@
       <div class="settings-section-label">Storage</div>
       <div class="settings-row">
         <span class="settings-key">Workflows</span>
-        <span class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/workflows.json</span>
+        <span id="s-path-workflows" class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/workflows.json</span>
       </div>
       <div class="settings-row" id="s-license-file-row">
         <span class="settings-key">License</span>
-        <span class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/license.key</span>
+        <span id="s-path-license" class="settings-val mono path-val" onclick="copyPath(this)">~/Library/Application Support/Helm/license.key</span>
       </div>
     </section>
 
@@ -949,10 +950,10 @@
 
     <div class="settings-divider"></div>
 
-    <section class="settings-section">
+    <section class="settings-section" id="s-focus-section">
       <div class="settings-section-label">Focus modes</div>
       <div class="settings-row" style="align-items:flex-start">
-        <span class="settings-val" style="font-size:11px;line-height:1.4;color:var(--helm-fog)">
+        <span class="settings-val" id="s-focus-help" style="font-size:11px;line-height:1.4;color:var(--helm-fog)">
           To activate a Focus mode from a workflow, create two macOS Shortcuts named exactly
           <span style="color:var(--helm-chalk)">Enable [Mode]</span> and
           <span style="color:var(--helm-chalk)">Disable [Mode]</span> in the Shortcuts app.
@@ -1103,6 +1104,21 @@
     }
   }
 
+  // Populated from the main process before first paint. Defaults are macOS so
+  // that a failed handshake degrades to the shipping platform rather than a
+  // blank UI; applyPlatformChrome() rewrites everything it touches.
+  let PLATFORM = {
+    id: 'darwin',
+    capabilities: {
+      perTabCapture: true, perTabClose: true,
+      focusModes: true, chromeProfiles: true, needsPermissionGrant: true,
+    },
+  };
+  const isWin = () => PLATFORM.id === 'win32';
+  const MOD_HINT = () => isWin()
+    ? 'Include at least one modifier key (Ctrl, Alt, Shift).'
+    : 'Include at least one modifier key (⌘, ⌃, ⌥, ⇧).';
+
   let toastTimer = null;
   function showToast(msg) {
     const el = document.getElementById('toast');
@@ -1114,7 +1130,8 @@
 
   function buildAccelerator(e) {
     const parts = [];
-    if (e.metaKey)  parts.push('Command');
+    // Electron only accepts 'Command' on macOS; the Windows key is 'Super'.
+    if (e.metaKey)  parts.push(isWin() ? 'Super' : 'Command');
     if (e.ctrlKey)  parts.push('Control');
     if (e.altKey)   parts.push('Alt');
     if (e.shiftKey) parts.push('Shift');
@@ -1129,18 +1146,25 @@
     return parts.join('+');
   }
 
+  // Mac renders modifiers as glyphs with no separator, which is the platform
+  // convention. Windows spells them out and keeps the plus signs — 'Ctrl+Alt+K'
+  // is what every Windows app shows, and the mac glyphs are not on the keycaps.
   function formatHotkey(acc) {
     if (!acc) return '';
-    return acc
+    const arrows = (s) => s
+      .replace(/\bUp\b/g,    '↑')
+      .replace(/\bDown\b/g,  '↓')
+      .replace(/\bLeft\b/g,  '←')
+      .replace(/\bRight\b/g, '→');
+    if (isWin()) {
+      return arrows(acc.replace(/Command|Super/g, 'Win').replace(/Control/g, 'Ctrl'));
+    }
+    return arrows(acc
       .replace(/Command/g, '⌘')
       .replace(/Shift/g,   '⇧')
       .replace(/Control/g, '⌃')
-      .replace(/Alt/g,     '⌥')
-      .replace(/Up/g,      '↑')
-      .replace(/Down/g,    '↓')
-      .replace(/Left/g,    '←')
-      .replace(/Right/g,   '→')
-      .replace(/\+/g,      ' ');
+      .replace(/Alt/g,     '⌥'))
+      .replace(/\+/g, ' ');
   }
 
   async function editModeHotkey() {
@@ -1160,7 +1184,7 @@
         return;
       }
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        showToast('Include at least one modifier key (⌘, ⌃, ⌥, ⇧).');
+        showToast(MOD_HINT());
         pill.textContent = originalText;
         return;
       }
@@ -1196,7 +1220,7 @@
         return;
       }
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        showToast('Include at least one modifier key (⌘, ⌃, ⌥, ⇧).');
+        showToast(MOD_HINT());
         pill.textContent = originalText;
         return;
       }
@@ -2256,10 +2280,12 @@
     const wrap = document.createElement('div');
     wrap.className = 'system-alert-bar';
     const msg = document.createElement('span');
-    msg.textContent = `Focus ${verb.toLowerCase()} requires a macOS Shortcut named ‘${verb} ${mode}’. `;
+    msg.textContent = isWin()
+      ? `Couldn't ${verb.toLowerCase()} Do Not Disturb. `
+      : `Focus ${verb.toLowerCase()} requires a macOS Shortcut named ‘${verb} ${mode}’. `;
     const openLink = document.createElement('a');
     openLink.href = '#';
-    openLink.textContent = 'Open Shortcuts';
+    openLink.textContent = isWin() ? 'Open Notifications settings' : 'Open Shortcuts';
     openLink.style.cssText = 'color:var(--helm-gold);text-decoration:underline;cursor:pointer;margin-left:2px;';
     openLink.addEventListener('click', (ev) => { ev.preventDefault(); window.api.openShortcutsApp(); });
     msg.appendChild(openLink);
@@ -2320,7 +2346,7 @@
       applyWheelState();
       if (state === 'visible') window.api.getTeardownMode().then(on => setModeUI(on));
       // Re-check accessibility on every show so granting permission is reflected immediately
-      if (state === 'visible') {
+      if (state === 'visible' && PLATFORM.capabilities.needsPermissionGrant) {
         const hasA11y = await window.api.getAccessibility();
         const val = document.getElementById('s-accessibility-val');
         const btn = document.getElementById('s-accessibility-btn');
@@ -2333,8 +2359,43 @@
     });
   });
 
+  // Rewrites the parts of the UI that name a specific operating system. Runs
+  // before the first workflow render so nothing macOS-shaped ever flashes on
+  // a Windows machine.
+  function applyPlatformChrome() {
+    document.body.classList.add('platform-' + PLATFORM.id);
+    if (!isWin()) return;
+
+    const el = id => document.getElementById(id);
+    const base = 'C:\\Users\\<you>\\AppData\\Roaming\\Helm\\Helm\\';
+    if (el('s-path-workflows')) el('s-path-workflows').textContent = base + 'workflows.json';
+    if (el('s-path-license'))   el('s-path-license').textContent   = base + 'license.key';
+
+    // Windows grants window enumeration to any process, so there is no
+    // permission to request and the row would only ever read "Granted".
+    if (!PLATFORM.capabilities.needsPermissionGrant) {
+      const row = el('s-accessibility-row');
+      const btn = el('s-accessibility-btn');
+      if (row) row.style.display = 'none';
+      if (btn) btn.style.display = 'none';
+    }
+
+    const help = el('s-focus-help');
+    if (help && PLATFORM.capabilities.focusModes === 'single') {
+      help.textContent =
+        'Windows has no per-mode focus API, so Helm offers one mode: Do Not Disturb. '
+        + 'A workflow that sets it suppresses notification toasts on launch and restores '
+        + 'them on teardown. App sounds and taskbar badges are unaffected.';
+    }
+  }
+
   // ── Boot ──────────────────────────────────────────────────────────────────
   (async () => {
+    try {
+      const info = await window.api.getPlatform();
+      if (info && info.id) PLATFORM = info;
+    } catch (_) { /* keep the macOS defaults */ }
+    applyPlatformChrome();
     const status = await window.api.getLicenseStatus();
     setProState(status.isPro);
     await loadWorkflows();
@@ -2365,10 +2426,12 @@
     toggle.textContent = loginOn ? 'On' : 'Off';
     toggle.classList.toggle('on', loginOn);
 
-    const hasA11y = await window.api.getAccessibility();
-    document.getElementById('s-accessibility-val').textContent = hasA11y ? 'Granted' : 'Not granted';
-    document.getElementById('s-accessibility-val').style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
-    document.getElementById('s-accessibility-btn').style.display = hasA11y ? 'none' : 'block';
+    if (PLATFORM.capabilities.needsPermissionGrant) {
+      const hasA11y = await window.api.getAccessibility();
+      document.getElementById('s-accessibility-val').textContent = hasA11y ? 'Granted' : 'Not granted';
+      document.getElementById('s-accessibility-val').style.color = hasA11y ? 'var(--helm-green)' : 'var(--helm-fog)';
+      document.getElementById('s-accessibility-btn').style.display = hasA11y ? 'none' : 'block';
+    }
 
     const modeHotkey = await window.api.getModeToggleHotkey();
     document.getElementById('s-mode-hotkey-pill').textContent = modeHotkey ? formatHotkey(modeHotkey) : '—';

@@ -5,284 +5,21 @@ if (!require('electron').app.isPackaged) {
   try { require('dotenv').config({ path: require('path').join(__dirname, '../.env') }); } catch (_) {}
 }
 
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, systemPreferences, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, shell, globalShortcut } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const runtimeConfig = require('./runtime-config');
 
-const { execFile } = require('child_process');
 const path    = require('path');
 
-// In a packaged .app, .jxa files live in Contents/Resources/jxa/.
-// In dev, they live in src/platform/macos/.
-function jxaPath(filename) {
-  const packed = path.join(process.resourcesPath ?? '', 'jxa', filename);
-  const dev    = path.join(__dirname, '../src/platform/macos', filename);
-  return require('fs').existsSync(packed) ? packed : dev;
-}
+// All OS automation goes through this. Backends live in electron/platform/;
+// see that index.js for the contract they implement.
+const platform = require('./platform');
 
-function profileProbePath() {
-  const packed = path.join(process.resourcesPath ?? '', 'bin', 'chrome-profile-probe');
-  const dev    = path.join(__dirname, '../scripts/chrome-profile-probe/bin/chrome-profile-probe');
-  return require('fs').existsSync(packed) ? packed : dev;
-}
 const storage = require('./storage');
 const license = require('./license');
 
 const FREE_LIMIT = 2;
-
-// ── Focus mode list ───────────────────────────────────────────────────────────
-async function getFocusModes() {
-  const fs = require('fs').promises;
-  const os = require('os');
-  const dbPath = path.join(os.homedir(), 'Library/DoNotDisturb/DB/ModeConfigurations.json');
-  try {
-    const raw = await fs.readFile(dbPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const modesConfig = parsed.data?.[0]?.modeConfigurations;
-    if (!modesConfig) return ['Do Not Disturb'];
-    const modes = Object.values(modesConfig)
-      .map(entry => entry?.mode?.name)
-      .filter(name => typeof name === 'string' && name.trim().length > 0);
-    return modes.length > 0 ? modes.sort() : ['Do Not Disturb'];
-  } catch(e) {
-    return ['Do Not Disturb'];
-  }
-}
-
-// ── VS Code open-file resolver ────────────────────────────────────────────────
-// Reads each open workspace's state.vscdb to get actual editor tabs, not just folder paths.
-function enrichCodeApps(apps) {
-  const hasCode = apps.some(a => a.name === 'Code');
-  if (!hasCode) return Promise.resolve(apps);
-
-  return new Promise(resolve => {
-    const scriptPath = jxaPath('vscode_state.py');
-    execFile('python3', [scriptPath], { timeout: 4000 }, (err, stdout) => {
-      if (err || !stdout) return resolve(apps);
-      try {
-        const files = JSON.parse(stdout.trim());
-        if (!Array.isArray(files) || files.length === 0) return resolve(apps);
-        // Replace the single Code stub with one entry per open file
-        const withoutCode = apps.filter(a => a.name !== 'Code');
-        const codeEntries = files.map(f => ({ name: 'Code', filePath: f.filePath, folderPath: f.filePath, label: f.label }));
-        resolve([...withoutCode, ...codeEntries]);
-      } catch(e) {
-        resolve(apps);
-      }
-    });
-  });
-}
-
-// ── Slack deep-link resolver ──────────────────────────────────────────────────
-// Reads Slack's LevelDB local storage via slack_state.py — no API token needed.
-// Works across all workspaces the user is signed into.
-function enrichSlackApps(apps) {
-  const hasSlack = apps.some(a => a.name === 'Slack');
-  if (!hasSlack) return Promise.resolve(apps);
-
-  return new Promise(resolve => {
-    const scriptPath = jxaPath('slack_state.py');
-    execFile('python3', [scriptPath], { timeout: 3000 }, (err, stdout) => {
-      if (err || !stdout) return resolve(apps);
-      try {
-        const { t: teamId, c: channelId, n: teamName } = JSON.parse(stdout.trim());
-        const url = (teamId && channelId)
-          ? `slack://channel?team=${teamId}&id=${channelId}`
-          : null;
-        resolve(apps.map(a => {
-          if (a.name !== 'Slack') return a;
-          return { ...a, urlToOpen: url || undefined, label: teamName || 'Slack' };
-        }));
-      } catch(e) {
-        resolve(apps);
-      }
-    });
-  });
-}
-
-// Native AX module previously used for window→profile mapping. Kept loaded for
-// possible future use but no longer required — title-based matching covers all
-// windows across Spaces without needing Accessibility permission.
-let nativeProfileProbe = null;
-try { nativeProfileProbe = require('../native/profile-probe'); }
-catch (e) { console.error('[profile-probe] native module unavailable:', e.message); }
-
-async function chromeWindowProfilesViaTitle() {
-  // Build {windowTitle: profileDir} by enumerating live Chrome windows + parsing titles.
-  const profileList = await callProfileProbe('list');
-  const byName = new Map();
-  if (Array.isArray(profileList)) {
-    for (const p of profileList) {
-      if (p && p.name && p.dir) byName.set(String(p.name), String(p.dir));
-    }
-  }
-  if (byName.size === 0) return {};
-  const titles = await new Promise(resolve => {
-    execFile('osascript', ['-l', 'JavaScript', '-e',
-      "function run() { try { var c=Application('Google Chrome'); if(!c.running()) return '[]'; return JSON.stringify(c.windows().map(function(w){try{return String(w.name());}catch(e){return '';}})); } catch(e) { return '[]'; } }"
-    ], { timeout: 4000 }, (err, stdout) => {
-      if (err) return resolve([]);
-      try { resolve(JSON.parse(String(stdout).trim())); } catch(_) { resolve([]); }
-    });
-  });
-  const map = {};
-  for (const t of titles) {
-    const dir = profileDirFromWindowTitle(t, byName);
-    if (dir) map[t] = dir;
-  }
-  return map;
-}
-
-function profileDirFromWindowTitle(title, profilesByName) {
-  if (!title) return null;
-  // Chrome appends " – <display name>" (em-dash) to window titles when 2+ profiles run.
-  const emDash = title.lastIndexOf(' – ');
-  if (emDash === -1) return null;
-  const suffix = title.slice(emDash + 3).trim();
-  // Try full suffix, then suffix with parenthetical stripped.
-  const base = suffix.replace(/\s*\([^)]*\)\s*$/, '').trim();
-  return profilesByName.get(suffix) || profilesByName.get(base) || null;
-}
-
-function loadChromeProfileCatalog() {
-  // Read Chrome's Local State and return a Map of every display form Chrome
-  // might put in a window title → profile directory.
-  const byKey = new Map();
-  const add = (key, dir) => {
-    if (key && dir && !byKey.has(key)) byKey.set(key, dir);
-  };
-  try {
-    const localStatePath = require('path').join(
-      require('os').homedir(),
-      'Library/Application Support/Google/Chrome/Local State'
-    );
-    const raw = require('fs').readFileSync(localStatePath, 'utf8');
-    const data = JSON.parse(raw);
-    const cache = (data.profile && data.profile.info_cache) || {};
-    for (const [dir, info] of Object.entries(cache)) {
-      if (!info) continue;
-      const name = info.name;
-      const gaiaName = info.gaia_given_name || info.gaia_name;
-      const userName = info.user_name;
-      add(name, dir);
-      if (gaiaName) add(gaiaName, dir);
-      if (userName) add(userName, dir);
-      // Chrome's disambiguated title format combines display name + descriptor.
-      // Observed format: "{gaia_given_name} ({name})" when multiple profiles share gaia name.
-      // Also handles "{name} ({user_name})" and "{gaia_name} ({name})".
-      if (gaiaName && name && gaiaName !== name) add(`${gaiaName} (${name})`, dir);
-      if (name && userName) add(`${name} (${userName})`, dir);
-      if (name && gaiaName && gaiaName !== name) add(`${name} (${gaiaName})`, dir);
-    }
-  } catch (e) {
-    console.error('[profile-probe] Local State read failed:', e.message);
-  }
-  return byKey;
-}
-
-function tabTitleToProfileMapFromAX() {
-  // Use the native AX module to get full window titles (with profile suffix),
-  // then build a map of tabTitle → profileDir. Only sees current-Space windows.
-  const out = new Map();
-  if (!nativeProfileProbe || !nativeProfileProbe.windowsRaw) return out;
-  let raw;
-  try { raw = nativeProfileProbe.windowsRaw(); } catch (_) { return out; }
-  if (!Array.isArray(raw)) return out;
-  const catalog = loadChromeProfileCatalog();
-  if (catalog.size === 0) return out;
-  for (const w of raw) {
-    if (!w || !w.title) continue;
-    const dir = profileDirFromWindowTitle(w.title, catalog);
-    if (!dir) continue;
-    // Strip " - Google Chrome – …" from full title to recover the tab title.
-    const tabTitle = w.title.replace(/\s+-\s+Google Chrome\s+[–-]\s+.*$/, '').trim();
-    if (tabTitle) out.set(tabTitle, dir);
-  }
-  return out;
-}
-
-async function buildHistoryProfileMap(urls) {
-  // For each Chrome profile, look up which URLs it has visited and when. The
-  // profile with the most-recent visit for each URL wins. Reads each profile's
-  // History SQLite via the system sqlite3 CLI (no new deps).
-  if (!urls.length) return new Map();
-  const path = require('path');
-  const fs = require('fs');
-  const os = require('os');
-  const catalog = loadChromeProfileCatalog();
-  if (catalog.size === 0) return new Map();
-  const profileDirs = Array.from(new Set(catalog.values()));
-  const chromeRoot = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
-
-  // Copy each History DB into a fresh private temp dir rather than a predictable
-  // path, so a same-user process can't pre-seed a symlink at our target filename.
-  let tmpRoot;
-  try { tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'helm-hist-')); }
-  catch (e) { return new Map(); }
-
-  const byUrl = new Map(); // url → {dir, time}
-  for (const dir of profileDirs) {
-    const src = path.join(chromeRoot, dir, 'History');
-    if (!fs.existsSync(src)) continue;
-    const tmp = path.join(tmpRoot, `${dir.replace(/\s+/g, '_')}.db`);
-    try {
-      fs.copyFileSync(src, tmp);
-    } catch (e) { continue; }
-    const inClause = urls.map(u => "'" + String(u).replace(/'/g, "''") + "'").join(',');
-    const sql = `SELECT url, MAX(last_visit_time) FROM urls WHERE url IN (${inClause}) GROUP BY url;`;
-    const out = await new Promise(resolve => {
-      execFile('/usr/bin/sqlite3', [tmp, sql], { timeout: 4000, maxBuffer: 1024 * 1024 * 4 },
-        (err, stdout) => resolve(err ? '' : String(stdout)));
-    });
-    for (const line of out.split('\n')) {
-      const idx = line.indexOf('|');
-      if (idx < 0) continue;
-      const url = line.slice(0, idx);
-      const t = parseInt(line.slice(idx + 1), 10);
-      if (!url || !Number.isFinite(t)) continue;
-      const prev = byUrl.get(url);
-      if (!prev || t > prev.time) byUrl.set(url, { dir, time: t });
-    }
-  }
-
-  try { fs.rmSync(tmpRoot, { recursive: true, force: true }); } catch (_) {}
-
-  const flat = new Map();
-  for (const [url, { dir }] of byUrl) flat.set(url, dir);
-  return flat;
-}
-
-async function enrichChromeProfiles(apps) {
-  const chromeRows = apps.filter(a => a.name === 'Google Chrome' && (a._windowTitle || a.urlToOpen));
-  if (chromeRows.length === 0) {
-    return apps.map(a => {
-      if (!a._windowTitle) return a;
-      const { _windowTitle, ...rest } = a;
-      return rest;
-    });
-  }
-  // AX provides high-confidence attribution for visible windows.
-  const axMap = tabTitleToProfileMapFromAX();
-  // History DB provides fallback attribution for all other Chrome rows.
-  const chromeUrls = chromeRows
-    .map(a => a.urlToOpen)
-    .filter(u => typeof u === 'string' && /^https?:\/\//i.test(u));
-  let historyMap = new Map();
-  try { historyMap = await buildHistoryProfileMap(chromeUrls); }
-  catch (e) { console.error('[profile-probe] history lookup failed:', e.message); }
-  console.error('[profile-probe] AX matches:', axMap.size, 'history matches:', historyMap.size);
-  return apps.map(a => {
-    if (a.name !== 'Google Chrome') return a;
-    const { _windowTitle, ...rest } = a;
-    if (_windowTitle && axMap.has(_windowTitle)) {
-      rest.profile = axMap.get(_windowTitle);
-    } else if (a.urlToOpen && historyMap.has(a.urlToOpen)) {
-      const dir = historyMap.get(a.urlToOpen);
-      if (/^(Default|Profile [0-9]+)$/.test(dir)) rest.profile = dir;
-    }
-    return rest;
-  });
-}
+const IS_WINDOWS = process.platform === 'win32';
 
 let tray      = null;
 let win       = null;
@@ -294,36 +31,12 @@ function isUserAuthorized() {
   return isPro;
 }
 
-function createTrayIcon() {
-  const icon = nativeImage.createFromPath(path.join(__dirname, '../public/brand/menubar-icon.png'));
-  // Provide @2x for Retina — Electron picks it up automatically when suffixed
-  const icon2x = nativeImage.createFromPath(path.join(__dirname, '../public/brand/menubar-icon@2x.png'));
-  const merged = icon2x.isEmpty() ? icon : icon2x;
-  merged.setTemplateImage(true);
-  return merged;
-}
-
-// 30s cache so a tight burst of run/teardown/get-accessibility IPCs doesn't
-// run a 3s blocking osascript on every call and freeze the tray.
-let _axCache = { result: null, at: 0 };
 function hasAccessibility() {
-  const now = Date.now();
-  if (_axCache.result !== null && now - _axCache.at < 30_000) return _axCache.result;
-  let result = false;
-  try {
-    const { execFileSync } = require('child_process');
-    execFileSync('osascript', ['-l', 'JavaScript', '-e',
-      'Application("System Events").processes.whose({backgroundOnly:false}).name()'],
-      { timeout: 3000, stdio: 'pipe' });
-    result = true;
-  } catch (e) {}
-  _axCache = { result, at: now };
-  return result;
+  return platform.hasAutomationPermission();
 }
 
 function requestAccessibility() {
-  // Prompts macOS to show the Accessibility permission dialog
-  systemPreferences.isTrustedAccessibilityClient(true);
+  platform.requestAutomationPermission();
 }
 
 // Defense-in-depth: the renderer only ever loads bundled local files and routes
@@ -340,8 +53,22 @@ function hardenNavigation(bw) {
 function getWindowPosition() {
   const trayBounds   = tray.getBounds();
   const windowBounds = win.getBounds();
-  const x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
-  const y = Math.round(trayBounds.y + trayBounds.height + 4);
+  const { screen } = require('electron');
+  const display = screen.getDisplayMatching(trayBounds).workArea;
+
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
+  // The Windows tray sits at the bottom of the screen, so the popover has to
+  // open upward from the icon instead of downward as it does on the Mac menu
+  // bar. Decide from where the tray actually is, not from the platform, since
+  // Windows users move the taskbar.
+  const opensDownward = trayBounds.y < display.y + display.height / 2;
+  let y = opensDownward
+    ? Math.round(trayBounds.y + trayBounds.height + 4)
+    : Math.round(trayBounds.y - windowBounds.height - 4);
+
+  // Keep the popover on screen when the tray icon is near a corner.
+  x = Math.max(display.x, Math.min(x, display.x + display.width - windowBounds.width));
+  y = Math.max(display.y, Math.min(y, display.y + display.height - windowBounds.height));
   return { x, y };
 }
 
@@ -370,27 +97,51 @@ async function activateLicense(key) {
   return result;
 }
 
-app.setAsDefaultProtocolClient('helm');
+// Registering the scheme from a dev run on Windows needs the interpreter plus
+// the script path; a packaged build is its own executable and needs neither.
+if (IS_WINDOWS && !app.isPackaged) {
+  app.setAsDefaultProtocolClient('helm', process.execPath, [path.resolve(process.argv[1] ?? '')]);
+} else {
+  app.setAsDefaultProtocolClient('helm');
+}
 
-app.on('open-url', (event, url) => {
-  event.preventDefault();
+function handleDeepLink(url) {
   try {
     const u   = new URL(url);
     const key = u.searchParams.get('key');
-    if (u.hostname === 'activate' && key) {
-      // A deep link is attacker-triggerable from any web page. Never silently
-      // overwrite an already-valid license — that would let a page swap a paying
-      // user's key for a junk/attacker key (drive-by deactivation/hijack).
-      if (isPro) {
-        if (win && !win.webContents.isDestroyed()) {
-          win.webContents.send('workflow-warning', { type: 'DEEPLINK_ACTIVATE_IGNORED' });
-        }
-        return;
+    if (u.hostname !== 'activate' || !key) return;
+    // A deep link is attacker-triggerable from any web page. Never silently
+    // overwrite an already-valid license — that would let a page swap a paying
+    // user's key for a junk/attacker key (drive-by deactivation/hijack).
+    if (isPro) {
+      if (win && !win.webContents.isDestroyed()) {
+        win.webContents.send('workflow-warning', { type: 'DEEPLINK_ACTIVATE_IGNORED' });
       }
-      activateLicense(key).catch(err => console.error('[deep-link] activate failed:', err));
+      return;
     }
+    activateLicense(key).catch(err => console.error('[deep-link] activate failed:', err));
   } catch (e) { /* malformed URL */ }
+}
+
+// macOS delivers deep links as an event to the running app. Windows launches a
+// second copy of the executable with the URL in argv, so the first instance has
+// to hold a lock and read the relaunch arguments.
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeepLink(url);
 });
+
+if (IS_WINDOWS) {
+  if (!app.requestSingleInstanceLock()) {
+    app.quit();
+  } else {
+    app.on('second-instance', (_event, argv) => {
+      const link = argv.find(a => typeof a === 'string' && a.startsWith('helm://'));
+      if (link) handleDeepLink(link);
+      else if (win) { win.show(); win.focus(); }
+    });
+  }
+}
 
 app.whenReady().then(async () => {
   // Phase 1: fast local Ed25519 signature check — unblocks UI immediately
@@ -414,7 +165,15 @@ app.whenReady().then(async () => {
     }).catch(() => {}); // network failures are intentionally ignored
   }
 
-  tray = new Tray(createTrayIcon());
+  // A deep link that starts the app arrives in this instance's argv, not
+  // through second-instance. Runs after the license phase above so isPro is
+  // already known and the "never overwrite a valid license" guard applies.
+  if (IS_WINDOWS) {
+    const coldLink = process.argv.find(a => typeof a === 'string' && a.startsWith('helm://'));
+    if (coldLink) handleDeepLink(coldLink);
+  }
+
+  tray = new Tray(platform.trayIcon());
   tray.setToolTip('Helm');
   tray.on('click', toggleWindow);
   tray.on('right-click', () => {
@@ -431,9 +190,7 @@ app.whenReady().then(async () => {
     show: false,
     frame: false,
     resizable: false,
-    transparent: true,
-    vibrancy: 'popover',
-    visualEffectState: 'followsWindowActiveState',
+    ...platform.windowOptions(),
     webPreferences: {
       backgroundThrottling: true,
       preload: path.join(__dirname, 'preload.js'),
@@ -454,7 +211,7 @@ app.whenReady().then(async () => {
   });
   win.on('closed', () => { win = null; });
 
-  app.dock.hide();
+  platform.hideFromTaskbar();
   registerWorkflowShortcuts();
   const saved = loadAppSettings();
   if (saved.modeToggleHotkey) registerModeToggleHotkey(saved.modeToggleHotkey);
@@ -468,7 +225,9 @@ app.whenReady().then(async () => {
     const welcome = new BrowserWindow({
       width: 480, height: 680,
       resizable: true, minimizable: false, maximizable: false,
-      titleBarStyle: 'hiddenInset',
+      // hiddenInset degrades to 'hidden' on Windows, which strips the caption
+      // buttons and leaves the user with no way to close this window.
+      ...(IS_WINDOWS ? { title: 'Welcome to Helm' } : { titleBarStyle: 'hiddenInset' }),
       backgroundColor: '#0A1628',
       webPreferences: {
         contextIsolation: true,
@@ -534,6 +293,29 @@ function isSafeId(s) {
   return typeof s === 'string' && /^[\w-]{1,128}$/.test(s);
 }
 
+// Filesystem paths. On macOS these end up inside doShellScript, so they keep
+// the strict no-shell-metacharacter rule above.
+//
+// Windows paths legitimately contain backslashes and colons, which that rule
+// rejects outright, so Windows gets its own filter. Relaxing it is only sound
+// because the Windows backend never sends a path through a shell: it spawns
+// argv arrays with shell:false. The characters still barred are the ones
+// Windows itself forbids in paths, plus quotes.
+const WINDOWS_PATH = /^[^\x00-\x1f\x7f"|<>*?]+$/;
+
+function isSafePath(s, maxLen = 512) {
+  if (typeof s !== 'string' || s.length === 0 || s.length > maxLen) return false;
+  return IS_WINDOWS ? WINDOWS_PATH.test(s) : SAFE_STRING.test(s);
+}
+
+// Executables are spawned directly, so this is the highest-value check in the
+// file. `.exe` only: handing spawn() a .bat or .cmd re-enters cmd.exe and
+// reintroduces shell parsing of the arguments (CVE-2024-27980), and .lnk/.scr
+// would let a workflow file point at anything at all.
+function isSafeExePath(s) {
+  return isSafePath(s, 512) && /\.exe$/i.test(s);
+}
+
 function validateWorkflow(w) {
   if (!w || typeof w !== 'object')                  return { ok: false, field: 'workflow' };
   if (!isSafeId(w.id))                              return { ok: false, field: 'id' };
@@ -548,11 +330,13 @@ function validateWorkflow(w) {
     if (app.urlToOpen !== undefined && app.urlToOpen !== null &&
         !isSafeUrl(app.urlToOpen))                  return at('app.urlToOpen');
     if (app.folderPath !== undefined &&
-        !isSafeString(app.folderPath, 512))         return at('app.folderPath');
+        !isSafePath(app.folderPath, 512))           return at('app.folderPath');
     if (app.labelFallback !== undefined &&
         !isSafeDisplayString(app.labelFallback, 256)) return at('app.labelFallback');
     if (app.filePath !== undefined &&
-        !isSafeString(app.filePath, 512))           return at('app.filePath');
+        !isSafePath(app.filePath, 512))             return at('app.filePath');
+    if (app.exePath !== undefined && app.exePath !== '' &&
+        !isSafeExePath(app.exePath))                return at('app.exePath');
     if (app.profile !== undefined && app.profile !== null && app.profile !== '' &&
         !/^(Default|Profile [0-9]+)$/.test(app.profile)) return at('app.profile');
     if (app.label !== undefined &&
@@ -644,54 +428,35 @@ async function teardownWorkflowById(workflowId) {
   if (!workflow) return { ok: false, error: 'Workflow not found' };
   const targets = (workflow.apps || [])
     .filter(a => a && isSafeDisplayString(a.name, 128))
-    .map(a => ({
-      name: a.name,
-      urlToOpen: a.urlToOpen,
-      profile: a.profile,
-    }));
+    .map(a => closeTargetFrom(a));
 
-  // If any Chrome target carries a profile, fetch the live window→profile
-  // map once so close.jxa can filter by exact window title (the only way to
-  // pin a tab to its profile on modern Chrome).
-  let chromeWinMap = null;
-  if (targets.some(t => t.name === 'Google Chrome' && t.profile)) {
-    chromeWinMap = await chromeWindowProfilesViaTitle();
-  }
-
-  await Promise.all(targets.map(a =>
-    new Promise(resolve => {
-      const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), a.name];
-      if (a.urlToOpen && isSafeUrl(a.urlToOpen)) {
-        closeArgs.push(a.urlToOpen);
-        if (a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile)) {
-          closeArgs.push(a.profile);
-          // 4th arg: \x1f-joined window titles in this profile (best-effort).
-          // close.jxa splits this on \x1f (String.fromCharCode(31)).
-          if (chromeWinMap && typeof chromeWinMap === 'object') {
-            const matching = Object.keys(chromeWinMap)
-              .filter(t => chromeWinMap[t] === a.profile);
-            if (matching.length) closeArgs.push(matching.join(String.fromCharCode(31)));
-          }
-        }
-      }
-      execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
-    })
-  ));
+  const ctx = await platform.prepareCloseContext(targets);
+  await Promise.all(targets.map(t => platform.close(t, ctx)));
 
   if (workflow.focusMode && isSafeString(workflow.focusMode, 128)) {
-    execFile('osascript',
-      ['-l', 'JavaScript', jxaPath('focus.jxa'), workflow.focusMode, 'disable'],
-      { timeout: 3000 }, (err) => {
-        if (err && win) {
-          win.webContents.send('workflow-warning', {
-            type: 'FOCUS_DISABLE_SHORTCUT_MISSING',
-            mode: workflow.focusMode
-          });
-        }
-      });
+    platform.setFocusMode(workflow.focusMode, false).then(res => {
+      if (!res.ok && win && !win.webContents.isDestroyed()) {
+        win.webContents.send('workflow-warning', {
+          type: 'FOCUS_DISABLE_SHORTCUT_MISSING',
+          mode: workflow.focusMode
+        });
+      }
+    });
   }
 
   return { ok: true };
+}
+
+// workflows.json is editable on disk, so every field is re-validated at
+// execution time rather than trusting the save-time check alone.
+function closeTargetFrom(a) {
+  return {
+    name: a.name,
+    url: (a.urlToOpen && isSafeUrl(a.urlToOpen)) ? a.urlToOpen : '',
+    profile: (a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile)) ? a.profile : '',
+    exePath: (a.exePath && isSafeExePath(a.exePath)) ? a.exePath : '',
+    label: (a.label && isSafeDisplayString(a.label, 256)) ? a.label : '',
+  };
 }
 
 async function runWorkflowById(workflowId) {
@@ -704,35 +469,33 @@ async function runWorkflowById(workflowId) {
 
   // 1. Close apps — fully resolved before any launch begins
   if (Array.isArray(workflow.closeApps) && workflow.closeApps.length > 0) {
-    const closeTargets = workflow.closeApps.filter(a => a && isSafeDisplayString(a.name, 128));
-    await Promise.all(closeTargets.map(closeTarget =>
-      new Promise(resolve => {
-        const closeArgs = ['-l', 'JavaScript', jxaPath('close.jxa'), closeTarget.name];
-        if (closeTarget.urlToOpen && isSafeUrl(closeTarget.urlToOpen)) closeArgs.push(closeTarget.urlToOpen);
-        execFile('osascript', closeArgs, { timeout: 5000 }, () => resolve());
-      })
-    ));
+    const closeTargets = workflow.closeApps
+      .filter(a => a && isSafeDisplayString(a.name, 128))
+      .map(a => closeTargetFrom(a));
+    const ctx = await platform.prepareCloseContext(closeTargets);
+    await Promise.all(closeTargets.map(t => platform.close(t, ctx)));
   }
 
   // 2. Open apps
   workflow.apps.forEach(appTarget => {
     if (!isSafeDisplayString(appTarget.name, 128)) return;
-    // Re-validate folderPath at execution like every other field — workflows.json
-    // is editable on disk, so don't trust the save-time check alone.
-    const folderPath = (appTarget.folderPath && isSafeString(appTarget.folderPath, 512))
+    // Re-validated here for the same reason as teardown: the file on disk is
+    // user-editable, so the save-time check is not the security boundary.
+    const folderPath = (appTarget.folderPath && isSafePath(appTarget.folderPath, 512))
       ? appTarget.folderPath : '';
-    const url = folderPath
-      ? folderPath
-      : (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : '');
-    const args = ['-l', 'JavaScript', jxaPath('launch.jxa'), appTarget.name, url];
-    const fp = (appTarget.filePath && isSafeString(appTarget.filePath, 512)) ? appTarget.filePath : '';
-    const profile = (appTarget.profile && /^(Default|Profile [0-9]+)$/.test(appTarget.profile))
-      ? appTarget.profile : '';
-    // Always push slot 3 so slot 4 (profile) stays positionally stable.
-    if (fp || profile) args.push(fp);
-    if (profile) args.push(profile);
-    execFile('osascript', args, { maxBuffer: 1024 * 1024 * 10 }, (err) => {
-      if (err && win && !win.webContents.isDestroyed()) {
+    const target = {
+      name: appTarget.name,
+      // macOS's launch.jxa takes a folder path in the URL slot; the Windows
+      // backend reads folderPath directly, so send both and let it choose.
+      url: folderPath || (appTarget.urlToOpen && isSafeUrl(appTarget.urlToOpen) ? appTarget.urlToOpen : ''),
+      folderPath,
+      filePath: (appTarget.filePath && isSafePath(appTarget.filePath, 512)) ? appTarget.filePath : '',
+      profile: (appTarget.profile && /^(Default|Profile [0-9]+)$/.test(appTarget.profile))
+        ? appTarget.profile : '',
+      exePath: (appTarget.exePath && isSafeExePath(appTarget.exePath)) ? appTarget.exePath : '',
+    };
+    platform.launch(target).then(res => {
+      if (!res.ok && win && !win.webContents.isDestroyed()) {
         win.webContents.send('workflow-warning', {
           type: 'LAUNCH_FAILED',
           appName: appTarget.name,
@@ -741,17 +504,16 @@ async function runWorkflowById(workflowId) {
     });
   });
 
-  // 3. Trigger Focus mode concurrently — non-zero exit sends warning to renderer
+  // 3. Trigger Focus mode concurrently — failure sends a warning to the renderer
   if (workflow.focusMode && isSafeString(workflow.focusMode, 128)) {
-    execFile('osascript', ['-l', 'JavaScript', jxaPath('focus.jxa'), workflow.focusMode],
-      { timeout: 3000 }, (err) => {
-        if (err && win) {
-          win.webContents.send('workflow-warning', {
-            type: 'FOCUS_SHORTCUT_MISSING',
-            mode: workflow.focusMode
-          });
-        }
-      });
+    platform.setFocusMode(workflow.focusMode, true).then(res => {
+      if (!res.ok && win && !win.webContents.isDestroyed()) {
+        win.webContents.send('workflow-warning', {
+          type: 'FOCUS_SHORTCUT_MISSING',
+          mode: workflow.focusMode
+        });
+      }
+    });
   }
 
   return { ok: true };
@@ -789,7 +551,7 @@ function registerWorkflowShortcuts() {
 // ── IPC handlers ──────────────────────────────────────────────────────────────
 
 ipcMain.handle('get-workflows',   () => storage.load());
-ipcMain.handle('get-focus-modes', () => getFocusModes());
+ipcMain.handle('get-focus-modes', () => platform.listFocusModes());
 
 ipcMain.handle('run-workflow', async (_, workflowId) => {
   if (activeExecutionGuard) return { ok: false, error: 'busy' };
@@ -814,40 +576,26 @@ ipcMain.handle('set-mode-toggle-hotkey', (_, accelerator) => {
   return { ok };
 });
 
-ipcMain.handle('capture-state', () => {
-  return new Promise(resolve => {
-    execFile(
-      'osascript', ['-l', 'JavaScript', jxaPath('capture.jxa')],
-      { maxBuffer: 1024 * 1024 * 10, timeout: 8000 },
-      (err, stdout) => {
-        if (err) {
-          const isTimeout = err.killed || err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT';
-          return resolve({ ok: false, error: isTimeout ? 'Scan timed out' : err.message });
-        }
-        try {
-          const data = JSON.parse(stdout.trim());
-          // Strip any URLs that aren't safe schemes — Spotify track IDs, chrome://, etc.
-          let apps = (data.apps || [])
-            .filter(a => a && typeof a.name === 'string' && a.name.trim().length > 0)
-            .map(a => {
-              if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
-                const { urlToOpen, ...rest } = a;
-                return rest;
-              }
-              return a;
-            });
-          // Enrich Slack (channel deep link) and Code (open files) via local app state
-          enrichSlackApps(apps)
-            .then(enrichCodeApps)
-            .then(enrichChromeProfiles)
-            .then(enriched => resolve({ ok: true, apps: enriched }))
-            .catch(() => resolve({ ok: true, apps }));
-        } catch (e) {
-          resolve({ ok: false, error: 'Failed to parse capture output' });
-        }
+ipcMain.handle('capture-state', async () => {
+  const result = await platform.capture();
+  if (!result.ok) return result;
+
+  // Strip any URLs that aren't safe schemes — Spotify track IDs, chrome://, etc.
+  const apps = (result.apps || [])
+    .filter(a => a && typeof a.name === 'string' && a.name.trim().length > 0)
+    .map(a => {
+      if (a.urlToOpen && !isSafeUrl(a.urlToOpen)) {
+        const { urlToOpen, ...rest } = a;
+        return rest;
       }
-    );
-  });
+      return a;
+    });
+
+  try {
+    return { ok: true, apps: await platform.enrich(apps) };
+  } catch (e) {
+    return { ok: true, apps };
+  }
 });
 
 ipcMain.handle('save-workflow', (_, workflow) => {
@@ -891,6 +639,9 @@ ipcMain.handle('save-workflow', (_, workflow) => {
         ...(a.filePath ? { filePath: String(a.filePath).slice(0, 512) } : {}),
         ...(a.profile && /^(Default|Profile [0-9]+)$/.test(a.profile) ? { profile: a.profile } : {}),
         ...(a.label ? { label: String(a.label).slice(0, 256) } : {}),
+        // Windows relaunches by executable path because there is no
+        // Application("<name>") equivalent to resolve a name back to a binary.
+        ...(a.exePath && isSafeExePath(a.exePath) ? { exePath: a.exePath } : {}),
       })),
       // preserve existing hotkey — save-workflow doesn't touch it
       ...(existing?.hotkey ? { hotkey: existing.hotkey } : {}),
@@ -948,53 +699,21 @@ ipcMain.handle('validate-license', async (_, key) => {
   return { ok: result.valid, email: result.email, offline: result.offline || false, reason: result.reason };
 });
 
-ipcMain.handle('open-shortcuts-app', () => {
-  shell.openExternal('shortcuts://').catch(() => {
-    execFile('open', ['-a', 'Shortcuts'], () => {});
-  });
-});
+ipcMain.handle('open-shortcuts-app', () => platform.openFocusHelp());
+
 ipcMain.handle('open-external', (_, url) => {
   if (!isSafeUrl(url)) return;
   shell.openExternal(url);
 });
 
-function callProfileProbe(action) {
-  return new Promise(resolve => {
-    const bin = profileProbePath();
-    if (!require('fs').existsSync(bin)) {
-      console.error('[profile-probe] binary missing at', bin);
-      return resolve(null);
-    }
-    execFile(bin, [action], { timeout: 5000, maxBuffer: 1024 * 1024 * 4 },
-      (err, stdout, stderr) => {
-        if (err) {
-          console.error('[profile-probe]', action, 'error:', err.message, 'stderr:', stderr);
-          return resolve(null);
-        }
-        console.error('[profile-probe]', action, 'stdout:', String(stdout).slice(0, 200));
-        try { resolve(JSON.parse(String(stdout || 'null'))); }
-        catch (e) { resolve(null); }
-      });
-  });
-}
+ipcMain.handle('list-chrome-profiles', () => platform.listChromeProfiles());
 
-ipcMain.handle('list-chrome-profiles', async () => {
-  const fromHelper = await callProfileProbe('list');
-  if (Array.isArray(fromHelper)) return fromHelper;
-  // Fallback to JXA (dev before swiftc compile)
-  return new Promise(resolve => {
-    execFile(
-      'osascript',
-      ['-l', 'JavaScript', jxaPath('chrome_profiles.jxa'), 'list'],
-      { timeout: 3000 },
-      (err, stdout) => {
-        if (err) return resolve([]);
-        try { resolve(JSON.parse(String(stdout || '[]'))); }
-        catch (e) { resolve([]); }
-      }
-    );
-  });
-});
+// Lets the renderer hide controls this platform cannot deliver instead of
+// offering them and failing at run time.
+ipcMain.handle('get-platform', () => ({
+  id: platform.id,
+  capabilities: platform.capabilities,
+}));
 
 ipcMain.handle('get-free-limit', () => FREE_LIMIT);
 
@@ -1052,7 +771,7 @@ ipcMain.handle('send-feedback', async (_, { message, email, attachLogs }) => {
 
   const body = [
     `Version: ${app.getVersion()}`,
-    `macOS: ${os.release()}`,
+    `OS: ${IS_WINDOWS ? 'Windows' : 'macOS'} ${os.release()}`,
     `Arch: ${process.arch}`,
     ``,
     message.trim(),

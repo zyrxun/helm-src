@@ -1,0 +1,34 @@
+<!--
+  Windows notification-area mark.
+
+  Not the same artwork as icon.svg. The app icon's ring is 36/1024 units wide,
+  which lands under half a pixel at the 16px tray size and greys out into a
+  smudge. Everything here is drawn at least 64/1024 (one whole pixel at 16px)
+  and the eight spoke terminals are cut to four, because at that size adjacent
+  spokes merge into a filled disc.
+
+  It also keeps the navy plate. Windows has no template-image convention, and
+  the taskbar is light in light mode — bare gold on white does not read.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" rx="180" fill="#0A1628"/>
+  <g transform="translate(512,512)" stroke="#D4AF6A" fill="none">
+    <circle r="322" stroke-width="76"/>
+    <!-- Spokes stop short of the hub. Run them through and the hub, the four
+         spokes and the ring fuse into one gold diamond at 16px. The ~80-unit
+         gap is the one dark pixel that keeps the wheel legible. -->
+    <g stroke-width="72" stroke-linecap="butt">
+      <line x1="0" y1="-306" x2="0" y2="-172"/>
+      <line x1="0" y1="172"  x2="0" y2="306"/>
+      <line x1="-306" y1="0" x2="-172" y2="0"/>
+      <line x1="172"  y1="0" x2="306"  y2="0"/>
+    </g>
+    <g fill="#D4AF6A" stroke="none">
+      <circle cy="-400" r="74"/>
+      <circle cy="400"  r="74"/>
+      <circle cx="-400" r="74"/>
+      <circle cx="400"  r="74"/>
+      <circle r="90"/>
+    </g>
+  </g>
+</svg>

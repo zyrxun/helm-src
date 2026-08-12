@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  getPlatform:        ()         => ipcRenderer.invoke('get-platform'),
   getWorkflows:       ()         => ipcRenderer.invoke('get-workflows'),
   runWorkflow:        (id)       => ipcRenderer.invoke('run-workflow', id),
   captureState:       ()         => ipcRenderer.invoke('capture-state'),

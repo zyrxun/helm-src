@@ -2,15 +2,18 @@
   "name": "helm",
   "productName": "Helm",
   "version": "1.0.3",
-  "description": "macOS menu bar workflow orchestrator",
+  "description": "Menu bar workflow orchestrator for macOS and Windows",
   "author": "zyrxun",
   "main": "electron/main.js",
   "scripts": {
     "build": "tsc && mkdir -p dist/jxa && cp src/platform/macos/*.jxa dist/jxa/",
     "build-helper": "bash scripts/chrome-profile-probe/build.sh",
     "menu-bar": "npm run build-helper && tsc && electron electron/main.js",
+    "menu-bar:win": "tsc && electron electron/main.js",
     "pack": "npm run build-helper && electron-builder --mac",
+    "pack:win": "tsc && electron-builder --win",
     "release": "npm run build-helper && electron-builder --mac --publish always",
+    "release:win": "tsc && electron-builder --win --publish always",
     "build-icon": "bash scripts/build-icon.sh"
   },
   "build": {
@@ -63,7 +66,60 @@
           ]
         }
       ],
-      "x64ArchFiles": "Contents/Resources/bin/*"
+      "x64ArchFiles": "Contents/Resources/bin/*",
+      "extraResources": [
+        {
+          "from": "src/platform/macos",
+          "to": "jxa",
+          "filter": [
+            "*.jxa"
+          ]
+        },
+        {
+          "from": "scripts/chrome-profile-probe/bin",
+          "to": "bin",
+          "filter": [
+            "chrome-profile-probe"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "public/brand/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "extraResources": [
+        {
+          "from": "src/platform/windows",
+          "to": "win",
+          "filter": [
+            "*.ps1"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "shortcutName": "Helm",
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-${version}-${arch}-setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-${arch}-portable.${ext}"
     },
     "dmg": {
       "background": "public/brand/dmg-background.png",
@@ -84,22 +140,6 @@
     },
     "afterSign": "scripts/notarize.js",
     "afterAllArtifactBuild": "scripts/after-artifact-build.js",
-    "extraResources": [
-      {
-        "from": "src/platform/macos",
-        "to": "jxa",
-        "filter": [
-          "*.jxa"
-        ]
-      },
-      {
-        "from": "scripts/chrome-profile-probe/bin",
-        "to": "bin",
-        "filter": [
-          "chrome-profile-probe"
-        ]
-      }
-    ],
     "asarUnpack": [
       "native/profile-probe/build/Release/*.node"
     ]
