@@ -29,6 +29,8 @@ public class HelmWindows {
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr h, StringBuilder s, int max);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr h, StringBuilder s, int max);
     [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr h, uint cmd);
     [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr h, int idx);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr h, int attr, out int val, int size);
@@ -80,6 +82,26 @@ public class HelmWindows {
             GetWindowThreadProcessId(child, out childPid);
             if (childPid != hostPid && childPid != 0) { found = childPid; return false; }
             return true;
+        }, IntPtr.Zero);
+        if (found != hostPid) return found;
+
+        // The child walk only works while the app is foreground. Windows 10
+        // detaches the app's CoreWindow from the frame when it loses focus:
+        // it becomes a cloaked top-level window and the frame's children are
+        // all host-owned chrome. Recover it by title — the frame mirrors the
+        // hosted app's window title exactly.
+        string frameTitle = TextOf(h);
+        if (frameTitle.Length == 0) return hostPid;
+        EnumWindows(delegate(IntPtr cand, IntPtr _) {
+            uint candPid;
+            GetWindowThreadProcessId(cand, out candPid);
+            if (candPid == hostPid || candPid == 0) return true;
+            StringBuilder cls = new StringBuilder(64);
+            GetClassName(cand, cls, cls.Capacity);
+            if (cls.ToString() != "Windows.UI.Core.CoreWindow") return true;
+            if (TextOf(cand) != frameTitle) return true;
+            found = candPid;
+            return false;
         }, IntPtr.Zero);
         return found;
     }

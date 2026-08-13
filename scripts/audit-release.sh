@@ -8,8 +8,15 @@ set -euo pipefail
 DIST="${1:-dist}"
 ASAR="$(find "$DIST" -name app.asar -path '*/Helm.app/*' | head -1)"
 
+# electron-builder --win writes the bundle to dist/win-*-unpacked/resources/
+# instead of a .app, so the macOS lookup above finds nothing on a Windows
+# build. Checked second so the macOS path is unaffected when it does match.
+if [ -z "$ASAR" ]; then
+  ASAR="$(find "$DIST" -name app.asar -path '*-unpacked/resources/*' | head -1)"
+fi
+
 if [ -z "$ASAR" ] || [ ! -f "$ASAR" ]; then
-  echo "audit: no app.asar found under $DIST/*/Helm.app — pack first" >&2
+  echo "audit: no app.asar found under $DIST (looked in */Helm.app/* and *-unpacked/resources/*) — pack first" >&2
   exit 1
 fi
 

@@ -40,7 +40,10 @@ public class HelmClose {
     private delegate bool EnumProc(IntPtr hWnd, IntPtr lParam);
 
     [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc cb, IntPtr p);
+    [DllImport("user32.dll")] private static extern bool EnumChildWindows(IntPtr h, EnumProc cb, IntPtr p);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetClassName(IntPtr h, StringBuilder s, int max);
     [DllImport("user32.dll")] private static extern int GetWindowTextLength(IntPtr h);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr h, StringBuilder s, int max);
@@ -55,6 +58,8 @@ public class HelmClose {
 
     public static List<IntPtr> TopLevelFor(uint[] pids) {
         List<IntPtr> hits = new List<IntPtr>();
+        List<IntPtr> frames = new List<IntPtr>();
+        HashSet<string> ownTitles = new HashSet<string>();
         HashSet<uint> want = new HashSet<uint>(pids);
         EnumWindows(delegate(IntPtr h, IntPtr _) {
             if (!IsWindowVisible(h)) return true;
@@ -62,9 +67,31 @@ public class HelmClose {
             if (GetWindowTextLength(h) == 0) return true;
             uint pid;
             GetWindowThreadProcessId(h, out pid);
-            if (want.Contains(pid)) hits.Add(h);
+            if (want.Contains(pid)) { hits.Add(h); ownTitles.Add(TitleOf(h)); return true; }
+            StringBuilder cls = new StringBuilder(64);
+            GetClassName(h, cls, cls.Capacity);
+            if (cls.ToString() == "ApplicationFrameWindow") frames.Add(h);
             return true;
         }, IntPtr.Zero);
+
+        // Store apps: the visible window belongs to ApplicationFrameHost, and a
+        // suspended app's own CoreWindow is detached from the frame and never
+        // pumps messages, so WM_CLOSE to it is swallowed. Close the frame
+        // instead — that is the window the title-bar X actually lives on. A
+        // frame is ours if a child window belongs to a target pid (foreground
+        // case) or its title mirrors one of the target's own windows (detached
+        // case).
+        foreach (IntPtr frame in frames) {
+            bool hosted = false;
+            EnumChildWindows(frame, delegate(IntPtr child, IntPtr _) {
+                uint childPid;
+                GetWindowThreadProcessId(child, out childPid);
+                if (want.Contains(childPid)) { hosted = true; return false; }
+                return true;
+            }, IntPtr.Zero);
+            if (!hosted && ownTitles.Contains(TitleOf(frame))) hosted = true;
+            if (hosted) hits.Add(frame);
+        }
         return hits;
     }
 

@@ -122,7 +122,13 @@ $browsers = @(
     @{ Proc = 'chrome';  Name = 'Google Chrome';   Root = "$env:LOCALAPPDATA\Google\Chrome\User Data" },
     @{ Proc = 'msedge';  Name = 'Microsoft Edge';  Root = "$env:LOCALAPPDATA\Microsoft\Edge\User Data" }
 )
+if ($rows.Count -eq 0) {
+    # Without this, a failed section 3 makes every browser look absent, which
+    # reads as "nothing to check" rather than "this check never ran".
+    Note 'skipped: section 3 returned no capture data, so there are no captions to compare'
+}
 foreach ($b in $browsers) {
+    if ($rows.Count -eq 0) { continue }
     $mine = @($rows | Where-Object { $_.process -eq $b.Proc })
     if ($mine.Count -eq 0) { Note "$($b.Name): not running"; continue }
     Write-Host "  $($b.Name): $($mine.Count) window(s)" -ForegroundColor White
@@ -184,3 +190,6 @@ if ($fail -eq 0) {
     Write-Host "$fail check(s) failed -- see FAIL/MISMATCH lines above." -ForegroundColor Red
 }
 Write-Host ''
+# Exit code, not just colour: without this the harness reports failures and
+# still exits 0, so anything scripted around it reads a clean run.
+if ($fail -ne 0) { exit 1 }
