@@ -1,5 +1,32 @@
 # Windows port — findings from the first run on real hardware
 
+> **Resolved since this report** (`e7c36bc`, written on the Mac, **not yet run
+> on Windows**):
+>
+> - **Ambiguous captions** no longer recover a URL at all. `New Tab`, `Google`,
+>   `Untitled`, `about:blank` and similar are refused, and the History query is
+>   restricted to `http(s)` so `chrome-extension://` can never win a match.
+>   Trade-off worth knowing: a window actually showing google.com is captioned
+>   `Google`, so that one row now captures without a URL. Refusing it beats
+>   binding to an arbitrary page with the same caption.
+> - **Focus mode now restores the machine.** The prior toast state is recorded
+>   under `HKCU:\SOFTWARE\Helm` before the first write and restored exactly,
+>   including deleting the value when there was none. Survives a crash
+>   mid-session.
+> - **Store-app teardown false positive closed.** The detached-CoreWindow
+>   fallback matched a frame against *any* window title of the target process,
+>   so a document named `Calculator` would have closed the real Calculator. Only
+>   `CoreWindow` titles identify a frame now.
+> - `verify-windows.ps1` flags a stranded focus session.
+>
+> The `chrome.js` change was verified against a real History DB and macOS still
+> reports 23/23 URL and profile recovery. The two `.ps1` changes are
+> structurally checked only — **section 2 of the harness is the first real test
+> of the new `close.ps1` C#, and focus enable/disable needs re-running.**
+>
+> Not changed: capture latency (~1.3 s, `Add-Type` recompiling per call) and the
+> overflow tray icon, which is a product decision.
+
 First execution of the `windows-port` branch on a physical Windows machine.
 Everything below was run on that box; nothing is inferred from reading code
 unless it says so explicitly.
