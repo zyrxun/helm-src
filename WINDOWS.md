@@ -1,9 +1,15 @@
 # Helm on Windows
 
-Status: **the port builds and the architecture is complete; nothing here has
-been run on a Windows machine yet.** Everything below is written from the
-implementation, not from a test session. Treat the "Unverified" section as the
-first job for whoever gets a Windows box in front of them.
+Status: **the backend is verified on real hardware; the UI is not.** A first run
+on a Windows 10 machine (2026-08-19) exercised capture, URL recovery, profile
+attribution, launch, teardown, focus mode and `pack:win` successfully, and found
+four defects, all fixed. Full results and the list of what remains untested:
+`WINDOWS_FINDINGS.md`.
+
+Nothing that requires clicking was tested — the tray icon has never been
+clicked, no hotkey has been pressed, and no workflow has been driven through the
+renderer. One product problem is open and unresolved: on Windows 10 the tray
+icon lands in the hidden overflow tray, so a first-run user never sees the app.
 
 ---
 
@@ -160,6 +166,20 @@ npm run menu-bar:win     # dev
 npm run pack:win         # NSIS installer + portable exe into dist/
 ```
 
+**`pack:win` needs Developer Mode enabled, or an elevated shell.**
+electron-builder unpacks its `winCodeSign` toolchain before every Windows
+build, and that archive contains macOS `.dylib` symlinks. Creating a symlink on
+Windows requires `SeCreateSymbolicLinkPrivilege`, which an ordinary user does
+not hold. Without it the build retries four times and dies on
+`Cannot create symbolic link : A required privilege is not held by the client`.
+Confirmed on Windows 10 22H2, unelevated, Developer Mode off. `menu-bar:win`
+is unaffected — this is packaging only.
+
+`pack:win` also needs `bash`, for the release audit hook. Git for Windows
+supplies one; `after-artifact-build.js` looks for it in the usual install
+locations rather than relying on `PATH`, which a stock machine does not have it
+on.
+
 `pack:win` produces:
 
 - `Helm-<version>-x64-setup.exe` and `Helm-<version>-arm64-setup.exe` (NSIS,
@@ -223,29 +243,76 @@ change — but the Windows artifacts have to be built on Windows and copied into
 
 ---
 
-## Unverified — do these first on a real Windows machine
+## Verified on hardware (2026-08-19, Windows 10 22H2)
 
-Nothing in this port has executed on Windows. In rough priority order:
+Evidence for each of these is in `WINDOWS_FINDINGS.md`.
 
-1. **The three PowerShell scripts parse and run.** They have been checked
-   structurally (balanced here-strings, braces) but never parsed by PowerShell,
-   and the embedded C# has never been compiled by `Add-Type`.
-2. **`capture.ps1` returns sane rows** — and, specifically, that the
-   `SKIP_PROCESSES` / `SKIP_TITLES` lists actually suppress the shell surfaces.
-   That list was written from knowledge of Windows internals, not from reading
-   a real capture, so expect to add entries.
-3. **Chrome window titles match `History` titles exactly.** The whole URL
-   recovery scheme rests on this. If Chrome truncates or decorates titles in
-   the window caption, `urlMapForTitles` needs a fuzzier match.
-4. **Edge's title suffix.** The regex tolerates a zero-width space inside
-   "Microsoft Edge" because some builds emit one. Confirm against a real Edge.
-5. **`backgroundMaterial: 'acrylic'`** renders as intended on Windows 11 and
-   degrades to solid Abyss on Windows 10.
-6. **Tray positioning.** `getWindowPosition()` computes `opensDownward` from
-   the tray icon's Y coordinate, which should place the popover *above* a
-   bottom-docked taskbar and below a top-docked one. Test both, plus a
-   secondary monitor.
-7. **Global hotkeys register.** `Super`-based accelerators may collide with
-   reserved Windows shortcuts.
-8. **The DND registry write takes effect** without a sign-out, and Explorer
-   picks it up live.
+- The three PowerShell scripts parse, and the embedded C# compiles via
+  `Add-Type`.
+- **Chrome window titles match `History` titles exactly** — the assumption the
+  whole port rests on. 4 of 4 browser windows recovered both URL and profile,
+  including a Gmail caption carrying a live unread count. No regex change
+  needed.
+- `SKIP_PROCESSES` suppresses the shell surfaces, and Helm filters its own
+  windows out of capture.
+- Launch works bare, with a URL, and with a Chrome profile.
+- Teardown is fail-closed for browsers: a title filter matching nothing closes
+  nothing. Targeted close hits only the intended window.
+- Focus mode drives the toast registry value both ways.
+- `backgroundMaterial: 'acrylic'` degrades to opaque Abyss on Windows 10.
+- Tray placement math is correct against real `tray.getBounds()`, including from
+  the overflow tray.
+- `pack:win` produces NSIS and portable builds carrying the right scripts.
+
+Two capture/teardown bugs were found and fixed: suspended Store apps were
+invisible to capture and immune to teardown, because Windows 10 detaches a
+backgrounded app's `CoreWindow` from its `ApplicationFrameWindow`.
+
+---
+
+## Still unverified
+
+**Nothing requiring mouse or keyboard input has ever been exercised** — the
+session that ran the tests could not inject either.
+
+1. **The tray icon has never been clicked.** Nor has the right-click menu been
+   opened.
+2. **The entire renderer path.** Capture rows in the popover, mode toggles, the
+   profile picker, saving and running a workflow. The backend is covered; the
+   route from `index.html` through `preload.js` to the IPC handlers is not.
+3. **Global hotkeys.** Never registered, never pressed. `Super`-based
+   accelerators may collide with reserved Windows shortcuts.
+4. **Teardown against genuinely unsaved work** — the case `WM_CLOSE` exists for.
+   No app has yet raised its own save prompt.
+5. **Cold-start deep links** (`helm://activate?key=`) through `process.argv`.
+6. **Edge.** Read correctly from `Local State`, but never running during a
+   capture, so the caption regex — the one tolerating a zero-width space — has
+   never met a real Edge caption.
+7. **`SKIP_TITLES`.** No window it targets ever appeared.
+8. **The NSIS installer.** Built, never executed. SmartScreen unseen.
+9. **Auto-update on Windows.**
+10. **`backgroundMaterial: 'acrylic'` on Windows 11.** Only the Windows 10
+    fallback has been seen.
+11. **Multi-monitor, and any taskbar edge other than bottom.** The placement
+    math was checked against synthetic bounds; the taskbar was never moved.
+
+---
+
+## Open product problem: the overflow tray
+
+On a stock Windows 10 desktop the tray icon goes to the **overflow** flyout
+behind the chevron, not the visible notification area. Windows decides this per
+new icon and defaults new arrivals to overflow; there is no API to promote one.
+
+For a menu-bar app this is close to fatal. The macOS model assumes the icon is
+always visible. On Windows a first-run user dismisses the welcome window and the
+app becomes invisible — no dock icon, no window, no taskbar button
+(`skipTaskbar: true`). Options, all requiring product work in `main.js` and the
+welcome flow:
+
+1. Have onboarding walk the user through pinning it, deep-linking to
+   `ms-settings:taskbar`.
+2. Make relaunch from the Start menu reliably show something.
+3. Open the popover once on first run, so the user sees where it lives.
+
+Undecided. Nothing has been implemented.

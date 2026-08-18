@@ -158,7 +158,11 @@ foreach ($b in $browsers) {
         foreach ($n in $names | Select-Object -First 10) {
             $hist = Join-Path (Join-Path $b.Root $n.Name) 'History'
             $has  = if (Test-Path $hist) { 'History OK' } else { 'NO History DB' }
-            Note "  $($n.Name)  ->  $($n.Value.name)   [$has]"
+            # Same field precedence as listProfiles() in chrome.js. This harness
+            # is what you consult when the app looks wrong, so it has to name
+            # profiles the way the app does or it manufactures a discrepancy.
+            $display = if ($n.Value.gaia_given_name) { $n.Value.gaia_given_name } else { $n.Value.name }
+            Note "  $($n.Name)  ->  $display   [$has]"
         }
     } catch { Fail "$($b.Name): could not parse Local State"; Note $_.Exception.Message }
 }
