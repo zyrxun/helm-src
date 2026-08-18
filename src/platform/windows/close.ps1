@@ -59,7 +59,7 @@ public class HelmClose {
     public static List<IntPtr> TopLevelFor(uint[] pids) {
         List<IntPtr> hits = new List<IntPtr>();
         List<IntPtr> frames = new List<IntPtr>();
-        HashSet<string> ownTitles = new HashSet<string>();
+        HashSet<string> coreTitles = new HashSet<string>();
         HashSet<uint> want = new HashSet<uint>(pids);
         EnumWindows(delegate(IntPtr h, IntPtr _) {
             if (!IsWindowVisible(h)) return true;
@@ -67,10 +67,19 @@ public class HelmClose {
             if (GetWindowTextLength(h) == 0) return true;
             uint pid;
             GetWindowThreadProcessId(h, out pid);
-            if (want.Contains(pid)) { hits.Add(h); ownTitles.Add(TitleOf(h)); return true; }
             StringBuilder cls = new StringBuilder(64);
             GetClassName(h, cls, cls.Capacity);
-            if (cls.ToString() == "ApplicationFrameWindow") frames.Add(h);
+            string className = cls.ToString();
+            if (want.Contains(pid)) {
+                hits.Add(h);
+                // Only a CoreWindow title can identify a Store app's frame.
+                // Keying off any window title of the target would let an
+                // ordinary document named "Calculator" close the real
+                // Calculator alongside it.
+                if (className == "Windows.UI.Core.CoreWindow") coreTitles.Add(TitleOf(h));
+                return true;
+            }
+            if (className == "ApplicationFrameWindow") frames.Add(h);
             return true;
         }, IntPtr.Zero);
 
@@ -79,7 +88,7 @@ public class HelmClose {
         // pumps messages, so WM_CLOSE to it is swallowed. Close the frame
         // instead — that is the window the title-bar X actually lives on. A
         // frame is ours if a child window belongs to a target pid (foreground
-        // case) or its title mirrors one of the target's own windows (detached
+        // case) or its title mirrors the target's own CoreWindow (detached
         // case).
         foreach (IntPtr frame in frames) {
             bool hosted = false;
@@ -89,7 +98,7 @@ public class HelmClose {
                 if (want.Contains(childPid)) { hosted = true; return false; }
                 return true;
             }, IntPtr.Zero);
-            if (!hosted && ownTitles.Contains(TitleOf(frame))) hosted = true;
+            if (!hosted && coreTitles.Count > 0 && coreTitles.Contains(TitleOf(frame))) hosted = true;
             if (hosted) hits.Add(frame);
         }
         return hits;

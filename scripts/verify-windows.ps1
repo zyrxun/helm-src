@@ -175,6 +175,14 @@ if (Test-Path $key) {
     if ($null -eq $v) { Note 'key exists, NOC_GLOBAL_SETTING_TOASTS_ENABLED not set yet (focus.ps1 will create it)' }
     else { Note "current value: $v  (0 = toasts suppressed, 1 = normal)" }
     Pass 'notifications key reachable'
+    # focus.ps1 records the pre-Helm state here and clears it on disable. A
+    # value left behind means Helm was killed mid-focus-session and the machine
+    # is still holding Helm's DND setting.
+    $prior = (Get-ItemProperty -Path 'HKCU:\SOFTWARE\Helm' -ErrorAction SilentlyContinue).PriorToastState
+    if ($null -ne $prior) {
+        Write-Host "  NOTE  Helm has a focus session open: prior toast state recorded as '$prior'" -ForegroundColor Yellow
+        Note 'disable focus mode in Helm to restore it, or delete HKCU:\SOFTWARE\Helm\PriorToastState'
+    }
 } else {
     Note 'key does not exist yet; focus.ps1 creates it on first use'
 }

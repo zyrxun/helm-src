@@ -126,25 +126,58 @@ async function profileMapForUrls(root, urls) {
   });
 }
 
+// Captions that many unrelated pages share. Recovery is title equality against
+// History, so these would bind to whichever row happened to be visited most
+// recently — silently writing an arbitrary page into a saved workflow. A row
+// with no URL is a much better outcome than a row with the wrong one: the user
+// sees an unresolved entry instead of trusting a link to somewhere they never
+// asked for. Match the browser's own placeholders only; anything longer is
+// specific enough that most-recent-wins is a fair bet.
+const AMBIGUOUS_TITLES = new Set([
+  'new tab',
+  'new incognito tab',
+  'untitled',
+  'about:blank',
+  'blank page',
+  'loading',
+  'loading...',
+  'google',
+  'error',
+  'problem loading page',
+  "can't reach this page",
+]);
+
+function isAmbiguousTitle(title) {
+  if (typeof title !== 'string') return true;
+  const t = title.trim().toLowerCase();
+  return t.length === 0 || AMBIGUOUS_TITLES.has(t);
+}
+
 // The Windows-only direction: given tab titles scraped from window titles,
 // recover each one's URL. Chrome records a title per visit, so an exact title
 // match against the most recent visit is a strong signal — a page whose title
 // you are looking at right now is almost always the newest row for that title.
 //
 // Returns title → {url, profileDir}. Misses are expected and are not errors:
-// a brand-new page may not be flushed to History yet, and pages that never
-// commit a title (blank tabs, some SPAs) never match.
+// a brand-new page may not be flushed to History yet, pages that never commit
+// a title never match, and ambiguous captions are refused outright above.
 async function urlMapForTitles(root, titles) {
-  if (!titles.length) return new Map();
+  const lookup = titles.filter(t => !isAmbiguousTitle(t));
+  if (!lookup.length) return new Map();
   if (!sqlite.available()) return new Map();
 
   return withHistoryCopies(root, async (copies) => {
     const byTitle = new Map(); // title → {url, dir, time}
-    const inClause = titles.map(sqlite.quote).join(',');
+    const inClause = lookup.map(sqlite.quote).join(',');
     for (const { dir, db } of copies) {
       const rows = await sqlite.query(db,
+        // http(s) only. A browser row exists to reopen a web page, and the
+        // non-web schemes in History (chrome-extension://, chrome://, file://)
+        // are all rejected downstream by SAFE_URL anyway — matching one just
+        // costs the row the real URL it might otherwise have found.
         `SELECT title, url, last_visit_time FROM urls
           WHERE title IN (${inClause}) AND last_visit_time > 0
+            AND (url LIKE 'http://%' OR url LIKE 'https://%')
           ORDER BY last_visit_time DESC LIMIT 500;`);
       if (!rows) continue;
       for (const [title, url, rawTime] of rows) {
