@@ -36,6 +36,18 @@ function scriptPath(filename) {
   return fs.existsSync(packed) ? packed : dev;
 }
 
+// Where capture.ps1 caches the assembly it compiles from its embedded C#.
+// userData, never the install directory: a per-machine install lives under
+// Program Files, which is read-only to the user and shared between accounts.
+// An unavailable path is not an error — capture.ps1 compiles inline instead.
+function psCacheDir() {
+  try {
+    return path.join(app.getPath('userData'), 'ps-cache');
+  } catch (e) {
+    return '';
+  }
+}
+
 function runPowerShell(file, args = [], { timeout = 8000, maxBuffer = 1024 * 1024 * 10 } = {}) {
   return new Promise(resolve => {
     // -ExecutionPolicy Bypass is per-process and needs no admin rights; without
@@ -114,7 +126,12 @@ function stripBrowserSuffix(title, browser) {
 }
 
 async function capture() {
-  const res = await runPowerShell(scriptPath('capture.ps1'), [], { timeout: 12000 });
+  const cacheDir = psCacheDir();
+  const res = await runPowerShell(
+    scriptPath('capture.ps1'),
+    cacheDir ? ['-CacheDir', cacheDir] : [],
+    { timeout: 12000 }
+  );
   if (!res.ok) {
     return { ok: false, error: res.timedOut ? 'Scan timed out' : res.error };
   }

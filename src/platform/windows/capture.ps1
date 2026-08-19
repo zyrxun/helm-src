@@ -9,11 +9,18 @@
 # Why P/Invoke instead of `Get-Process | ? MainWindowTitle`: that only exposes
 # one window per process, which would collapse a three-window Chrome session
 # into a single row. Chrome multi-window is the case this product exists for.
+#
+# -CacheDir enables the compiled-assembly cache described at Import-HelmWindows.
+# Left empty the script compiles inline every run, which is correct but slow;
+# win32.js passes Helm's userData directory. Defaulting to off keeps a bare
+# `powershell -File capture.ps1` (verify-windows.ps1 section 3) side-effect free.
+
+param([string]$CacheDir = '')
 
 $ErrorActionPreference = 'SilentlyContinue'
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Add-Type -TypeDefinition @'
+$HelmWindowsSource = @'
 using System;
 using System.Text;
 using System.Collections.Generic;
@@ -129,10 +136,84 @@ public class HelmWindows {
 }
 '@
 
+# Every capture spawns a fresh powershell.exe, so an in-process type cache buys
+# nothing — the C# above is recompiled from scratch on each call, which costs
+# more than the window enumeration it exists to perform. Compile it once to a
+# DLL under $CacheDir instead and load that on later runs.
+#
+# The cache file is named after the SHA-256 of the source it was built from, so
+# an edit to the C# — or a stale DLL left by an older Helm — can never satisfy
+# the lookup; it simply misses and recompiles under a new name.
+#
+# Loading the bytes rather than Add-Type -Path / Assembly::LoadFrom is
+# deliberate on two counts: LoadFrom pins a lock on the file for the life of
+# the process, which would make a concurrent instance's replace fail, and the
+# Add-Type cmdlet drags in the compiler infrastructure even when handed a
+# prebuilt assembly, costing nearly as much as compiling.
+#
+# Any problem here — unwritable directory, truncated or corrupt DLL, a race
+# with another instance — falls through to the plain inline compile. Capture
+# must never fail because a cache is bad.
+function Import-HelmWindows([string]$Source, [string]$Dir) {
+    if ($Dir) {
+        try {
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            try {
+                $digest = $sha.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($Source))
+            } finally { $sha.Dispose() }
+            $stamp = ([BitConverter]::ToString($digest) -replace '-', '').Substring(0, 16)
+            $dll = Join-Path $Dir "capture-$stamp.dll"
+
+            if (Test-Path -LiteralPath $dll) {
+                try {
+                    $asm = [System.Reflection.Assembly]::Load([System.IO.File]::ReadAllBytes($dll))
+                    if ($asm.GetType('HelmWindows')) { return }
+                } catch { }
+                Remove-Item -LiteralPath $dll -Force -ErrorAction SilentlyContinue
+            }
+
+            if (-not (Test-Path -LiteralPath $Dir)) {
+                [void](New-Item -ItemType Directory -Path $Dir -Force -ErrorAction Stop)
+            }
+
+            # Compile to a private name first: a reader must never see a
+            # half-written DLL, and two instances racing must not corrupt each
+            # other's output.
+            $staging = Join-Path $Dir ("staging-$stamp-" + [Guid]::NewGuid().ToString('N') + '.dll')
+            Add-Type -TypeDefinition $Source -OutputAssembly $staging -OutputType Library -ErrorAction Stop
+            [void][System.Reflection.Assembly]::Load([System.IO.File]::ReadAllBytes($staging))
+            try { Move-Item -LiteralPath $staging -Destination $dll -Force -ErrorAction Stop }
+            catch { Remove-Item -LiteralPath $staging -Force -ErrorAction SilentlyContinue }
+
+            # Sweep DLLs from older versions of this source, plus any staging
+            # file orphaned by a crash between the compile and the move. The
+            # age guard keeps the sweep off a concurrent instance's staging file.
+            $stale = (Get-Date).AddMinutes(-5)
+            Get-ChildItem -LiteralPath $Dir -Filter '*.dll' -ErrorAction SilentlyContinue |
+                Where-Object {
+                    ($_.Name -like 'capture-*' -and $_.Name -ne "capture-$stamp.dll") -or
+                    ($_.Name -like 'staging-*' -and $_.LastWriteTime -lt $stale)
+                } |
+                ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+            return
+        } catch { }
+    }
+    Add-Type -TypeDefinition $Source
+}
+
+Import-HelmWindows $HelmWindowsSource $CacheDir
+
+# `Get-Process -Id <n>` walks the entire process table on every call, so asking
+# per window cost ~15 ms each and dominated the run. One snapshot, indexed.
+$procById = $null
 $procCache = @{}
 function Get-ProcInfo([uint32]$procId) {
     if ($procCache.ContainsKey($procId)) { return $procCache[$procId] }
-    $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+    if ($null -eq $script:procById) {
+        $script:procById = @{}
+        foreach ($proc in (Get-Process -ErrorAction SilentlyContinue)) { $script:procById[[int]$proc.Id] = $proc }
+    }
+    $p = $script:procById[[int]$procId]
     $info = $null
     if ($p) {
         $exePath = ''
