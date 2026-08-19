@@ -1,6 +1,193 @@
-# Session Handoff — 2026-08-13 (Windows port reaches real hardware)
+# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, commit and push)
 
 > Newest on top. Previous handoffs preserved below.
+
+Ran on Richard's Windows 10 PC, branch `windows-port`. This session closed out
+the 08-14 session's tree: everything below is now **committed and pushed to
+`windows-port`**.
+
+## What happened
+
+- **The capture-cache benchmark was re-run on an idle machine (2026-08-20)**,
+  because the 08-14 numbers were taken on a busy one and did not settle the
+  question, and no numbers from any interim re-run were ever recorded. Fresh
+  `powershell.exe` per run, modes interleaved. Result: warm-cache median
+  **364 ms vs 566 ms baseline (~35% faster)**, stable (7 of 8 warm reps within
+  355–382 ms); cold stays slower and noisy but is paid once per source hash.
+  **Verdict: keep** — item 4 is no longer "implemented but unjustified."
+- **`WINDOWS_FINDINGS.md` second-session section finished.** It had been cut
+  off after Item 1. Items 3–6, both benchmark sets, the manual test list, and
+  new suggested next steps are now in it, and the intro's re-measurement date
+  was corrected to 08-20 (the claimed 08-19 numbers were never written down
+  anywhere, so they were unusable). Two handoff inaccuracies were fixed in the
+  document rather than propagated: the `win32.js` line refs are 195/208 in the
+  current tree (the handoff's 178/191 were pre-diff), and `darwin.js` calls
+  four `chrome.js` exports, not one — none of them `urlMapForTitles`, so the
+  neutrality argument stands unchanged.
+- **Everything re-verified before committing:** all four modified JS files pass
+  `node --check`; `smoke-platform.js` run live under Electron — capture 6 rows
+  in ~1.2 s, the one open Chrome window recovered URL + profile 1/1 through the
+  new strict caption rule; the diffs match what the 08-14 handoff described.
+
+## Tree state
+
+Committed and pushed, in review-sized pieces: the welcome/tray-overflow work,
+the ambiguous-caption rule, the capture cache (now justified), the
+docs/harness pair, then findings + this handoff. `package-lock.json` remains
+modified-but-uncommitted — it predates all of this work; leave it alone.
+Untracked scratch (`tmp-ambig.js`, `../.helm-scratch/ambig2.js`) kept, as
+before, because the ambiguity analysis is re-runnable from them.
+
+## Still open — needs Richard
+
+Unchanged from 08-14, reproduced in `WINDOWS_FINDINGS.md` so it survives on
+its own: item 2 of the six (re-run stages 1 and 3 by hand) and the ranked
+manual test list, of which the first four gate the port — first-run tray-icon
+discoverability from a deleted `welcomed` marker, second-launch `win.show()`,
+title-only browser rows through the renderer, teardown with unsaved work.
+
+---
+---
+
+# Session Handoff — 2026-08-14 (Windows next-steps 1, 3, 4, 5, 6)
+
+Ran on Richard's Windows 10 PC, branch `windows-port`. Picked up the six
+"Suggested next steps" at the end of `WINDOWS_FINDINGS.md`. **Nothing is
+committed — the working tree carries all of it.** Read "Tree state" below
+before touching anything.
+
+## Status of the six next steps
+
+| # | Item | State |
+|---|---|---|
+| 1 | Overflow tray icon | Implemented, needs a human to judge whether it works |
+| 2 | Re-run stages 1 and 3 by hand | **Not done — needs a mouse. Richard's** |
+| 3 | Developer Mode in `WINDOWS.md` | Done |
+| 4 | Cache capture's `Add-Type` | Implemented, **measured as no clear win** |
+| 5 | Ambiguous captions | Done, measured, verified |
+| 6 | Harness/app profile names agree | Done |
+
+## 1 — Overflow tray icon (`main.js`, `preload.js`, `welcome.html`)
+
+New `open-taskbar-settings` IPC opens `ms-settings:taskbar`; the URI is a
+literal in the handler, nothing from the renderer reaches `openExternal`.
+No-op off Windows. `welcome.html` gained a Windows-only card carrying the
+guidance and a button onto that settings page, and its four macOS cards are now
+gated by `data-platform` + a `getPlatform()` handshake. **Default is macOS**, so
+a failed handshake degrades to the shipping platform.
+
+Verified: `ms-settings` is registered on this machine, and the URI lands on
+Personalization → Taskbar — read the live window through UI Automation, which
+returned the section headings including "Select which icons appear on the
+taskbar". Not verified: the click path from renderer → preload → handler, and
+whether the card actually gets a first-run user to the icon. That second one is
+the whole point of the item and only a human can answer it.
+
+Two defects fixed in this session's own earlier draft of that card: a doubled
+20px gap before "Got it" (`.card` already supplies `margin-bottom: 20px`, so
+the extra `body.platform-win32 > button` rule double-counted), and copy that
+named Windows 10 and the Windows 10-only label "Select which icons appear on
+the taskbar" — wrong on Windows 11, which Helm also supports. Copy is now
+version-neutral and leans on the deep-link button rather than a Settings label
+string that ages between builds.
+
+## 5 — Ambiguous captions (`chrome.js`, shared file)
+
+Measured against this machine's real 11-profile Chrome History: **4158 distinct
+titles, 27.5% of which match more than one URL.** Once a title has two
+candidates only 58% are the same page and one in eight is on a different host.
+Title length does not separate the cases — a 65-character caption still matched
+21 URLs across two hosts — so the blocklist and length-threshold ideas floated
+in `WINDOWS_FINDINGS.md` both fail on the data.
+
+New rule: **a caption recovers a URL only when every History row sharing it
+resolves to the same page** — scheme + host + path + fragment identical, only
+`?query` may differ. Anything else recovers nothing and the row captures with
+its title and no URL, which is an already-supported outcome. Profile is gated
+separately: settled page, several profiles → `profileDir: null`, and the
+renderer's picker takes it.
+
+The `LIMIT 500` came out of the query on purpose, not as cleanup: a truncated
+row could be the one that proves ambiguity, so truncating converts a safe
+refusal into a silent wrong answer.
+
+macOS safety: `urlMapForTitles` has exactly one caller in the repo,
+`win32.js:178`. `darwin.js` requires `chrome.js` but uses only
+`profileMapForUrls`, which is untouched. Neutral by unreachability, so no
+`process.platform` guard was added. Verified independently of the agent that
+wrote it. `win32.js:191` tests `profileDir` against a regex, so `null`
+stringifies to `"null"`, fails the match, and omits the field — no crash.
+
+Cost, on `smoke-platform.js`: URL recovery went **5/5 → 2/5**. All three
+refusals were genuine — 37, 75 and 21 distinct URLs respectively, each spanning
+two hosts. Each refusal logs its caption.
+
+## 4 — Capture cost: implemented but NOT justified
+
+`capture.ps1` takes an optional `-CacheDir` and compiles its embedded C# to a
+SHA-named DLL there, loading the bytes on later runs; `win32.js` passes Helm's
+userData. Every failure path falls back to a plain inline `Add-Type`. Also
+replaced the per-window `Get-Process -Id` with one indexed snapshot.
+
+**The measurements do not support keeping it.** Three reps, this machine, ms:
+
+| rep | baseline | cold (compile + write) | warm (load DLL) |
+|---|---|---|---|
+| 1 | 1405 | 2443 | 1326 |
+| 2 | 1581 | 1246 | 810 |
+| 3 | 1226 | 2047 | 1159 |
+
+Warm is maybe 20% better, cold is *worse* than baseline, and the spread
+overlaps everywhere. An earlier back-to-back set read 404–536 ms and was
+flattered by OS file-cache warmth — do not trust it. The machine was busy
+during all of this. **Someone needs to re-measure on an idle box before this is
+worth keeping**; it adds runtime disk writes and a cache-invalidation story to
+the core capture path in exchange for an unproven win.
+
+What *is* verified about it: `capture.ps1` parses; output is **byte-identical**
+to the committed version; the no-`-CacheDir` path (`verify-windows.ps1`) still
+works; and a deliberately corrupted DLL is detected, discarded, recompiled, and
+capture still returns correct output. Coverage caveat: the capture returned
+only 4 windows, because a sandboxed session sees few — see "Section 3 is a
+sandbox artifact" in `WINDOWS_FINDINGS.md`. Byte-identical on 4 rows is weaker
+evidence than it sounds.
+
+## Tree state — read before you touch it
+
+Nine modified files, nothing committed, nothing pushed.
+
+- Verified, ready to commit: `WINDOWS.md`, `scripts/verify-windows.ps1`,
+  `electron/platform/chrome.js`, `electron/main.js`, `electron/preload.js`,
+  `public/welcome.html`
+- Implemented but unjustified, commit separately or revert:
+  `src/platform/windows/capture.ps1`, `electron/platform/win32.js`
+- `package-lock.json` — predates this work, leave alone
+
+`WINDOWS_TESTING.md` wants code fixes committed separately from
+`WINDOWS_FINDINGS.md`, and `WINDOWS_FINDINGS.md` has **not** yet been updated
+with any of the above. That is the first job for the next session.
+
+Untracked scratch, safe to delete, kept only because the analysis is
+re-runnable: `tmp-ambig.js` (repo root — `top`, `short`, `probe`, `pick`) and
+`.helm-scratch/ambig2.js` (`table`, `lens`, `rule`, `danger`, `apply`).
+
+## Manual test list handed to Richard
+
+Given to him in-session; reproduced here so it is not lost. Ranked, the first
+four gate the port: (1) delete the `welcomed` marker, launch, and see whether a
+first-run user can find the tray icon at all; (2) second launch from the Start
+menu while running — does `win.show()` produce anything visible; (3) browser
+rows that now capture with no URL — do they launch and does the profile picker
+still work; (4) teardown with genuinely unsaved work, noting that non-browser
+targets close *every* window of that process. Then the ~30-minute sweep from
+the "Not tested" list: tray click and popover placement, right-click menu, full
+UI flow, global hotkey (`Super` may collide), focus mode, NSIS install,
+SmartScreen, cold-start `helm://` deep link. Second monitor and a re-docked
+taskbar need hardware this box has not got.
+
+---
+
+# Session Handoff — 2026-08-13 (Windows port reaches real hardware)
 
 Branch `windows-port` — three commits: the port itself (`27823af`), a
 verification harness (`5eb881a`), and the first fix found by running on an

@@ -628,7 +628,7 @@ working.
 
 ---
 
-## Suggested next steps
+## Suggested next steps (2026-08-13)
 
 1. **Decide what to do about the overflow tray icon.** This is the one that
    determines whether Windows users can use the product at all.
@@ -640,3 +640,482 @@ working.
    the embedded C# every time.
 5. Decide whether ambiguous captions should recover a URL at all.
 6. Make `verify-windows.ps1` and `chrome.js` agree on profile display names.
+
+---
+---
+
+# Second session — 2026-08-14: next steps 1, 3, 4, 5, 6
+
+Same machine as above, same branch, the day after. This session picked up the
+six "Suggested next steps" and closed five of them. **Item 2 — re-running
+stages 1 and 3 by hand — was not done and cannot be done by a session without a
+mouse.** A ranked manual test list was handed to Richard instead, and is
+reproduced at the end of this section so this document stands on its own.
+
+One measurement here is later than the rest: item 4's benchmark was re-run on
+**2026-08-20** on an otherwise idle machine, because the 08-14 numbers were
+taken on a busy one and did not settle the question. Both sets are below, in
+that order, and the later one is why item 4 is kept rather than reverted.
+
+| # | Item | State |
+|---|---|---|
+| 1 | Overflow tray icon | Implemented; the part that matters needs a human |
+| 2 | Re-run stages 1 and 3 by hand | **Not done — needs a mouse** |
+| 3 | Developer Mode in `WINDOWS.md` | Done |
+| 4 | Cache capture's `Add-Type` | Implemented; justified by the 08-20 re-measurement |
+| 5 | Ambiguous captions | Done, measured, verified |
+| 6 | Harness and app agree on profile names | Done |
+
+## What changed in this session
+
+Eight files. **Nothing is committed** — the working tree carries all of it.
+`package-lock.json` still shows as modified; it predates this work and was left
+alone, as before.
+
+| File | Scope | Change |
+|---|---|---|
+| `WINDOWS.md` | docs | Developer Mode / elevated-shell prerequisite for `pack:win`, with the real symlink error and the by-hand cache workaround |
+| `scripts/verify-windows.ps1` | Windows-only | Section 5 resolves profile display names the way `chrome.js` does; the 10-profile truncation is disclosed; picker-skipped directories are called out |
+| `src/platform/windows/capture.ps1` | Windows-only | Optional `-CacheDir`; the embedded C# compiles once to a SHA-named DLL and loads from it thereafter. Per-window `Get-Process -Id` replaced by one indexed snapshot |
+| `electron/platform/win32.js` | Windows-only | `capture()` passes Helm's userData as `-CacheDir` |
+| `electron/platform/chrome.js` | **shared** | `urlMapForTitles` refuses to recover a URL from an ambiguous caption. Safety argument below |
+| `electron/main.js` | **shared** | New `open-taskbar-settings` IPC. Returns immediately unless `IS_WINDOWS`; no existing handler touched |
+| `electron/preload.js` | **shared** | One added bridge line, `openTaskbarSettings`. Nothing existing altered |
+| `public/welcome.html` | **shared** | Windows-only card added; the four macOS cards gated by `data-platform`. Default view is macOS |
+
+Untouched: `public/index.html`, `electron/platform/index.js`, `darwin.js`,
+`sqlite.js`, and everything under `src/platform/macos/`,
+`native/profile-probe/`, `website/`, `marketing/`, `ads/`.
+
+---
+
+## Item 1 — the overflow tray icon
+
+The first session's finding was that a first-run Windows 10 user never sees
+Helm, because Windows files new tray icons into the overflow flyout and offers
+no API to promote one. What shipped is option 1 from that list: tell the user,
+and hand them the settings page that can fix it.
+
+**The IPC** (`electron/main.js`):
+
+```js
+ipcMain.handle('open-taskbar-settings', () => {
+  if (!IS_WINDOWS) return;
+  shell.openExternal('ms-settings:taskbar');
+});
+```
+
+The URI is a literal. The handler takes no argument, so nothing the renderer
+sends reaches `openExternal` — this sits beside the existing `open-external`
+handler's `isSafeUrl` gate rather than widening it. Off Windows the handler
+returns before `openExternal` is called at all, which matters because
+`ms-settings:` is not a registered scheme on macOS.
+
+**The preload bridge** (`electron/preload.js`) is a single added line:
+
+```js
+openTaskbarSettings:    ()   => ipcRenderer.invoke('open-taskbar-settings'),
+```
+
+**The welcome window** (`public/welcome.html`) gained a Windows-only card
+naming the ship's-wheel icon, explaining the chevron, and carrying an
+`Open Taskbar settings` button. The four existing macOS cards (menu bar,
+"Can't see it?", Accessibility, Focus-mode Shortcut) are unchanged in content
+and now carry `data-platform="darwin"`. The gate:
+
+```css
+[data-platform="win32"] { display: none; }
+body.platform-win32 [data-platform="win32"] { display: flex; }
+body.platform-win32 [data-platform="darwin"] { display: none; }
+```
+
+**macOS safety.** The win32 card is hidden by the stylesheet's default state,
+and `body.platform-win32` is only ever added after `window.api.getPlatform()`
+resolves with `id === 'win32'`. The handshake is wrapped in a `try` whose catch
+does nothing. So on macOS — and equally if the IPC fails, or the script never
+runs at all — the page renders exactly the four cards it rendered before this
+change, in the same order, with the same markup. The failure mode is "shows the
+macOS guidance", not "shows a window with no guidance in it", which is the
+right default while macOS is the shipping platform.
+
+Two defects in this session's own first draft of that card were found and fixed
+before it was called done: a doubled 20px gap above the "Got it" button (`.card`
+already supplies `margin-bottom: 20px`, and a `body.platform-win32 > button`
+rule was adding it a second time), and copy that named Windows 10 and quoted
+the Windows 10-only label "Select which icons appear on the taskbar" — wrong on
+Windows 11, which Helm also supports. The copy is now version-neutral and leans
+on the deep-link button rather than a Settings label string that ages between
+builds.
+
+### Verified
+
+`ms-settings` is registered on this machine, and `ms-settings:taskbar` lands on
+Personalization → Taskbar. That was confirmed by reading the live Settings
+window through UI Automation rather than by trusting the URI: the automation
+returned the page's section headings, including "Select which icons appear on
+the taskbar". The destination is right.
+
+### Not verified
+
+- **The click path.** Renderer → `preload.js` → handler was never exercised.
+  The handler was verified in isolation; the button has never been clicked.
+  Same gap, same cause, as everything in the first session's "Not tested" list.
+- **Whether the card works.** Whether a first-run user reads it, follows it,
+  and ends up with a visible Helm icon is the entire point of the item, and no
+  amount of code inspection answers it. It needs a human who has not seen the
+  card before, starting from a deleted `welcomed` marker.
+
+Item 1 is implemented, not resolved.
+
+---
+
+## Item 3 — the Developer Mode prerequisite in `WINDOWS.md`
+
+Docs only. The first session hit blocker 3, worked around it by hand, and left
+the prerequisite written down nowhere a builder would look. `WINDOWS.md` now
+carries it, in the build section immediately after the `pack:win` command —
+which itself gained a one-line pointer to the new section.
+
+The section states the constraint plainly: `pack:win` cannot complete on a
+normal, non-elevated Windows account, because electron-builder unpacks its
+`winCodeSign` toolchain before every Windows build and that archive contains
+macOS `.dylib` symlinks, which need `SeCreateSymbolicLinkPrivilege`. The real
+failure text is quoted rather than paraphrased, since it is what someone will
+search for when the build dies five minutes in:
+
+```
+ERROR: Cannot create symbolic link : A required privilege is not held by the client.
+  : ...\winCodeSign\227697207\darwin\10.12\lib\libcrypto.dylib
+  • Above command failed, retrying 3 more times
+```
+
+Two fixes are given: enable Developer Mode (Settings → Update & Security → For
+developers), which grants the privilege to the signed-in user, persists across
+reboots, and leaves the build itself unelevated; or run `pack:win` from an
+elevated shell.
+
+The by-hand workaround is documented as a last resort — extract the archive into
+`%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\` with a tool that tolerates
+the failed symlinks, then re-run, and the build finds the cache populated and
+skips the unpack. It is written down with its caveats attached: it is
+per-machine state the repo does not carry, it has to be redone whenever
+electron-builder bumps the toolchain version, and it is how the 1.0.3 Windows
+build in stage 4 above was produced. A `pack:win` on a machine with Developer
+Mode actually on has still never been run.
+
+The `windows-10\*.dll` extraction failures from the same archive are recorded
+too, as antivirus rather than privilege, and as not blocking the build while
+signing is skipped.
+
+---
+
+## Item 4 — caching `capture.ps1`'s `Add-Type` compile
+
+The first session measured capture at ~1.3 s for 8 windows and attributed most
+of it to PowerShell startup plus `Add-Type` recompiling the embedded C# on every
+call. This item attacks the second half of that.
+
+**The mechanism.** `capture.ps1` takes a new optional `-CacheDir`. The embedded
+C# is no longer handed straight to `Add-Type`; it is held in a variable and
+passed to `Import-HelmWindows`, which — given a cache directory — compiles it
+once with `Add-Type -OutputAssembly` into a DLL named after the SHA-256 of that
+source, and on every later run loads the file's bytes with
+`[System.Reflection.Assembly]::Load`. Naming the file after the hash of the
+source is the entire invalidation story: edit the C# and the hash changes, the
+lookup misses, and a new DLL is compiled under a new name. Nothing has to be
+told the source changed, and a stale DLL left by an older Helm can never satisfy
+a lookup.
+
+Three details are load-bearing:
+
+- The compile goes to a GUID-suffixed staging name and is moved into place
+  afterwards, so a reader never sees a half-written DLL and two instances racing
+  cannot corrupt each other's output. A sweep removes DLLs built from older
+  source, and staging files orphaned by a crash, with an age guard so it cannot
+  delete a concurrent instance's work in progress.
+- The load reads bytes rather than using `Add-Type -Path` or
+  `Assembly::LoadFrom`. `LoadFrom` holds a lock on the file for the life of the
+  process, which would make a concurrent instance's replace fail, and the
+  `Add-Type` cmdlet drags in the compiler infrastructure even when handed a
+  prebuilt assembly, costing nearly as much as compiling from scratch.
+- **Every failure path falls back to a plain inline `Add-Type`** — unwritable
+  directory, truncated or corrupt DLL, a race with another instance, or no
+  `-CacheDir` at all. Capture never fails because a cache is bad. That default
+  also keeps a bare `powershell -File capture.ps1`, which is how
+  `verify-windows.ps1` section 3 invokes it, free of side effects.
+
+`win32.js` passes Helm's `userData` directory (a `ps-cache` folder inside it),
+never the install directory: a per-machine install lives under Program Files,
+which is read-only to the user and shared between accounts. If `app.getPath`
+throws, the argument is omitted entirely and the script compiles inline.
+
+Not caching, but shipped in the same change and measured with it: the per-window
+`Get-Process -Id` was replaced by one indexed snapshot of the process table.
+`Get-Process -Id` walks the whole table on every call, about 15 ms per window,
+which on a busy desktop dominated the run.
+
+### Verified (2026-08-14)
+
+- `capture.ps1` parses.
+- Output is **byte-identical** to the committed version.
+- The no-`-CacheDir` path still works.
+- A deliberately corrupted DLL is detected, discarded, recompiled, and capture
+  still returns correct output.
+
+Coverage caveat: the capture being compared returned only **4 windows**, because
+a sandboxed session sees few — see "Section 3 is a sandbox artifact" above.
+Byte-identical on 4 rows is weaker evidence than it sounds.
+
+### Measurement 1 — 2026-08-14, busy machine
+
+Three reps, ms:
+
+| rep | baseline | cold (compile + write) | warm (load DLL) |
+|---|---|---|---|
+| 1 | 1405 | 2443 | 1326 |
+| 2 | 1581 | 1246 | 810 |
+| 3 | 1226 | 2047 | 1159 |
+
+Warm is maybe 20% better, cold is *worse* than baseline, and the spread overlaps
+everywhere. The verdict at the time was that the change was not justified: it
+adds runtime disk writes and a cache-invalidation story to the core capture path
+in exchange for an unproven win. The machine was in active use throughout, and
+the handoff said so and asked for a re-measurement on an idle box.
+
+### Measurement 2 — 2026-08-20, idle machine
+
+Re-run on an otherwise idle machine, with a **fresh `powershell.exe` per run** —
+which is how `win32.js` invokes it, and the only reason a cross-process cache
+can pay for itself at all — and with the modes **interleaved** rather than run
+in blocks, so any drift in machine load falls on all of them equally.
+
+Five interleaved reps, ms:
+
+| rep | baseline | warm (load DLL) | cold (fresh cache dir, compile + write) |
+|---|---|---|---|
+| 1 | 533 | 540 | 512 |
+| 2 | 487 | 390 | 1006 |
+| 3 | 525 | 551 | 461 |
+| 4 | 656 | 366 | 612 |
+| 5 | 675 | 490 | 1236 |
+
+The first cold run of the whole session — the one that primed the cache from
+nothing — took **2729 ms**, and is listed separately here rather than folded
+into the table, because it is a once-per-machine cost and averaging it in would
+misrepresent both directions.
+
+Output length was identical across all three modes within each rep, and a full
+baseline-versus-warm comparison of the captured output came back byte-identical.
+
+Then eight interleaved baseline/warm reps, dropping cold:
+
+| | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | median |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline | 427 | 416 | 792 | 665 | 553 | 571 | 566 | 420 | **566** |
+| warm | 360 | 647 | 382 | 361 | 362 | 366 | 364 | 355 | **364** |
+
+**Warm is about 200 ms — roughly 35% — faster at the median, and it is steadier
+as well: seven of the eight warm reps land between 355 and 382 ms.** The win is
+real and it reproduces on an idle machine. Cold is still slower than baseline
+and still noisy, but cold is paid once per source hash, which in practice means
+roughly once per release.
+
+The number that explains the 08-14 session is the baseline itself: ~550 ms idle
+against ~1400 ms busy. On a loaded machine, PowerShell startup and scheduling
+noise cost two to three times the entire idle cost of a capture, and they swamp
+a 200 ms effect completely. The 08-14 measurements were not wrong; they were
+taken somewhere the signal could not be seen.
+
+**Verdict: keep.**
+
+---
+
+## Item 5 — ambiguous captions
+
+The first session flagged this as a risk and floated two fixes: prefer the most
+recently visited match, and skip recovery for a small blocklist of known-generic
+captions. Both were measured against this machine's real 11-profile Chrome
+History before any code was written, and both fail on the data.
+
+### The measurement
+
+**4158 distinct titles. 27.5% of them match more than one URL.** Among the
+titles that do have several candidates, only **58%** resolve to the same page —
+the rest are genuinely different pages, and **one in eight spans a different
+host**. On this machine, a multi-candidate caption therefore has better than a
+one-in-three chance of naming a page other than the one on screen, and better
+than a one-in-ten chance of naming a different site entirely.
+
+Title length does not separate the safe cases from the dangerous ones. A
+**65-character** caption — long enough to look distinctive under any threshold
+anyone would actually pick — still matched **21 URLs across two hosts**. That
+disposes of the length-threshold idea, and the blocklist idea goes with it: the
+ambiguous captions are not a small enumerable set of `New Tab` / `Untitled` /
+`Google` strings, they are a quarter of everything, most of them ordinary page
+titles. "Prefer the most recent visit" is no help either — it is exactly what
+the code already did, and its wrong answers are silent ones.
+
+### The new rule
+
+A caption recovers a URL only when **every** History row sharing that title
+resolves to the same page. Same page means scheme, host, path and fragment all
+identical; only the `?query` may differ, because tracking, session and redirect
+parameters change from visit to visit while the page a caption refers to stays
+put, whereas SPAs route on the fragment and it has to count.
+
+Anything else recovers nothing, and the row captures with its title and no URL.
+That is not a new outcome — it is the same one that already happens for a page
+History has not flushed yet, and callers already handle it.
+
+Profile is gated separately from the URL. A settled page visited from several
+profiles yields `profileDir: null`, because choosing one of them would be the
+same kind of guess the URL rule has just refused to make; the renderer's profile
+picker takes it from there.
+
+**The `LIMIT 500` came out of the query on purpose, not as cleanup.** Under the
+old "newest visit wins" rule a truncated result was merely incomplete. Under the
+new rule, the row that gets cut off could be the very one that proves the title
+ambiguous — so truncation converts a safe refusal into a silent wrong answer.
+The `IN` clause holds one entry per open browser window, so the unbounded result
+stays small.
+
+### macOS safety
+
+`chrome.js` is a shared file, so this is the part that mattered most.
+
+`urlMapForTitles` has exactly one caller in the repo: `win32.js:195`.
+`darwin.js` does require `chrome.js`, but the functions it calls are
+`loadProfileCatalog`, `profileDirFromWindowTitle`, `profileMapForUrls` and
+`listProfiles` — never `urlMapForTitles` — and none of those four were touched.
+The change is neutral on macOS by unreachability, and **no `process.platform`
+guard was added**: a guard would imply the function is reachable on macOS and
+needs suppressing there, which describes the code less accurately than the call
+graph already does. This was checked independently of the agent that wrote the
+change.
+
+The one new value that escapes into a caller is `profileDir: null`.
+`win32.js:208` tests it against `/^(Default|Profile [0-9]+)$/`, so `null`
+stringifies to `"null"`, fails the match, and the `profile` field is simply
+omitted from the row. No crash, and the row lands in the shape the picker
+already expects.
+
+### What it costs
+
+On `smoke-platform.js`, URL recovery went from **5/5 to 2/5**. That is the
+honest headline and it reads like a regression, so all three refusals were
+checked by hand. All three are genuine: those captions matched **37, 75 and 21
+distinct URLs** respectively, and each of the three sets spanned two hosts.
+There was no right answer available to pick in any of them.
+
+Each refusal logs its caption:
+
+```js
+console.log('[chrome] caption matches more than one page, no URL recovered:', title);
+```
+
+so a user reporting "it did not remember my tab" leaves behind a trace that says
+why, rather than a silent gap.
+
+### Not verified
+
+What one of those title-only rows does from the renderer — whether it launches,
+and whether the profile picker still works on it — has never been exercised.
+Three of the five browser rows on this machine now take that path, so it is not
+a corner case. It is item 3 on the manual test list below.
+
+---
+
+## Item 6 — the harness and the app agree on profile display names
+
+The first session found `verify-windows.ps1` reporting `Default -> Person 1` and
+`Profile 11 -> Work` where `chrome.js` reported `Default -> Richard` and
+`Profile 11 -> Zhongyu Richard` for the same profiles: two independent readers
+of `Local State` picking different fields out of `profile.info_cache`. Cosmetic,
+except that the harness exists to be the thing you trust when the app looks
+wrong, so a disagreement there costs more than it looks.
+
+Section 5 now resolves the display name the way `listProfiles()` in `chrome.js`
+does — `gaia_given_name`, falling back to `name`, falling back to the directory
+— behind a comment saying to keep the two in step if that resolution ever
+changes. Where the two fields differ, the raw `Local State` `name` is printed
+alongside in parentheses, so a caption carrying the other one is still
+recognisable in harness output.
+
+Two silences in the same section were closed at the same time:
+
+- **The listing was capped at 10 profiles with no indication of it.** It now
+  prints `... and N more`. On this machine, with 11 Chrome profiles, exactly one
+  was being dropped without a word — in a section whose whole job is to
+  enumerate profiles.
+- **Directories the app's picker skips are now called out.** The picker filters
+  on `/^(Default|Profile [0-9]+)$/`; anything else in `Local State` is invisible
+  to it. The harness used to list such directories as though they were fully
+  supported, and now names them and says the picker skips them.
+
+The change is confined to section 5 of `verify-windows.ps1`. Nothing outside
+that file reads it.
+
+---
+
+## What was handed to Richard — the manual test list
+
+Item 2 of the six — re-running stages 1 and 3 by hand — is the one this session
+could not do, for exactly the reason the first session could not: no synthetic
+mouse or keyboard input. A ranked list was handed over in-session instead, and
+is reproduced here so this document stands on its own.
+
+**The first four gate the port.** Nothing else on the list matters until they
+are answered.
+
+1. **Delete the `welcomed` marker, launch, and find out whether a first-run user
+   can find the tray icon at all.** This is item 1's real question, and every
+   line of the welcome-card work is a guess until someone who has not seen the
+   card tries to follow it. The marker is `%APPDATA%\Helm\welcomed` for the
+   packaged app and `%APPDATA%\Electron\welcomed` in dev — they are separate,
+   so dismissing one does not dismiss the other.
+2. **Second launch from the Start menu while Helm is already running.** The
+   single-instance handler runs through to `win.show()`. The open question is
+   whether that produces anything the user can actually see, or whether the
+   second launch appears to do nothing at all — which on a machine where the
+   tray icon is hidden is the difference between a recoverable app and an
+   invisible one.
+3. **Browser rows that now capture with no URL.** After item 5, three of the
+   five browser rows on this machine refuse to recover a URL. Do those rows
+   launch, and does the profile picker still work on them?
+4. **Teardown with genuinely unsaved work on screen** — the case the `WM_CLOSE`
+   design exists for, and the one thing never once exercised, because every
+   window closed during testing had nothing to lose. Note while doing it that
+   non-browser targets close **every** window of that process, not just the
+   labelled one.
+
+Then the roughly 30-minute sweep of the first session's "Not tested" list:
+
+- Tray click, and popover placement as an actual experience rather than as
+  arithmetic against `tray.getBounds()`.
+- The right-click tray context menu (`Open Helm` / `Quit`).
+- The full UI flow: capture rows in the popover, mode toggles, the profile
+  picker, saving a workflow, running it, tearing it down.
+- Global hotkey registration and an actual key press. `Super` may collide with
+  Windows' own shortcuts.
+- Focus mode end to end from the UI.
+- Installing from `Helm-1.0.3-x64-setup.exe` and running the installed copy.
+- SmartScreen on an unsigned download. Nobody has seen what that looks like.
+- Cold-start `helm://` deep link through `process.argv`.
+
+Two items need hardware this box has not got: second-monitor behaviour, and a
+top-, left- or right-docked taskbar.
+
+---
+
+## Suggested next steps (2026-08-20)
+
+1. **Richard runs the manual test list above.** Item 2 of the six is still open
+   and needs a mouse. The first four questions on that list gate the Windows
+   port, and nothing in this document answers them.
+2. **A human judges the welcome card from a genuine first run** — delete the
+   `welcomed` marker, launch, and see whether the card actually gets someone who
+   has not seen it before to a visible tray icon. That is the unresolved half of
+   item 1, and no amount of code inspection substitutes for it.
+3. Everything else from the six is closed. Items 3, 4, 5 and 6 are done and
+   written up above; item 4 is now justified by measurement rather than kept on
+   hope.
