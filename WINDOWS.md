@@ -331,7 +331,7 @@ session that ran the tests could not inject either.
 
 ---
 
-## Open product problem: the overflow tray
+## The overflow tray — onboarding guidance shipped, effectiveness unproven
 
 On a stock Windows 10 desktop the tray icon goes to the **overflow** flyout
 behind the chevron, not the visible notification area. Windows decides this per
@@ -348,4 +348,22 @@ welcome flow:
 2. Make relaunch from the Start menu reliably show something.
 3. Open the popover once on first run, so the user sees where it lives.
 
-Undecided. Nothing has been implemented.
+**Option 1 is implemented** (`6fa840e`). The welcome window shows a
+Windows-only card that names the ship's-wheel icon, explains that Windows
+files new icons into the overflow menu behind the chevron, and offers an
+**Open Taskbar settings** button. The card is gated by `data-platform` in
+`public/welcome.html` — the four macOS cards carry `data-platform="darwin"`,
+the new one `data-platform="win32"`, and the default view stays macOS. The
+button calls `openTaskbarSettings` across the preload bridge, into an
+`open-taskbar-settings` IPC handler in `electron/main.js` that opens
+`ms-settings:taskbar` via `shell.openExternal`. The handler returns
+immediately off Windows; no existing handler was touched.
+
+**Options 2 and 3 are not implemented.** Relaunch from the Start menu still
+runs through to `win.show()` with nobody having watched what that looks like,
+and the popover does not open itself on first run.
+
+The open question is whether the card actually works. Every line of it is a
+guess until someone who has not seen it before deletes the `welcomed` marker,
+launches, and tries to follow it to a visible tray icon. That needs a human —
+see `WINDOWS_FINDINGS.md`, item 1 of the manual test list.

@@ -26,6 +26,20 @@
 >
 > Not changed: capture latency (~1.3 s, `Add-Type` recompiling per call) and the
 > overflow tray icon, which is a product decision.
+>
+> **Update — 2026-08-20 (PC).** The re-runs this note asks for are done on real
+> Windows hardware, and they pass. The harness clears all seven sections,
+> `focus.ps1` returns the registry to its exact prior shape including absence,
+> and `close.ps1` is exercised fail-closed, against a win32 window and against a
+> Store app on the CoreWindow-only path. Transcripts are in **Third session —
+> 2026-08-20** at the end of this file. Two corrections to the first bullet: the
+> blocklist described there was **superseded during the rebase** by a measured
+> rule — a caption recovers a URL only when every `History` row sharing it names
+> the same page, which refuses `New Tab` on the data rather than by name, and
+> with no list to maintain. The `http(s)` restriction survives with the same
+> guarantee, but it now lives at emission rather than in the SQL, so a
+> `chrome-extension://` row still counts toward ambiguity instead of being
+> filtered out of sight. The full argument is in that section.
 
 First execution of the `windows-port` branch on a physical Windows machine.
 Everything below was run on that box; nothing is inferred from reading code
@@ -1119,3 +1133,257 @@ top-, left- or right-docked taskbar.
 3. Everything else from the six is closed. Items 3, 4, 5 and 6 are done and
    written up above; item 4 is now justified by measurement rather than kept on
    hope.
+
+---
+
+# Third session — 2026-08-20, later the same day: reconciling with the Mac session's fixes
+
+Same machine, same branch, a few hours after the section above was written.
+This session did no new engineering. It merged two independent bodies of work
+and then ran the hardware tests the Mac session could not run.
+
+## What happened
+
+The two machines fixed the same three defects at the same time, without
+knowing about each other. The Mac session committed `313648b`, `e7c36bc` and
+`d39ecf3` on 2026-08-19 and pushed them. This PC had five commits sitting
+locally that covered overlapping ground. A fetch surfaced the divergence, and
+the five PC commits were rebased onto `d39ecf3`:
+
+```
+09f1354 Findings: second-session results, cache justified by idle re-measurement
+70dec9d Windows docs + harness: pack:win Developer Mode prereq, profile-name parity
+9253ecf Windows capture: cache the compiled C# to a DLL, snapshot processes once
+f2cacb2 Capture: refuse URL recovery from ambiguous captions
+6fa840e Windows welcome: overflow-tray guidance card + open-taskbar-settings IPC
+d39ecf3 WINDOWS_FINDINGS.md: mark the three defects resolved
+e7c36bc Fix the three defects left open by the Windows hardware run
+313648b WINDOWS.md: record the hardware run; align harness profile names
+```
+
+**Most of the Mac session's work is kept exactly as it landed.** Nothing in
+this reconciliation touches it:
+
+- `focus.ps1` recording the prior toast state under `HKCU:\SOFTWARE\Helm` and
+  restoring it exactly, including deleting the value when there was none.
+- `close.ps1` matching a detached Store-app frame on `CoreWindow` titles only,
+  so a document named `Calculator` can no longer take the real Calculator down.
+- The stranded-focus-session check in `verify-windows.ps1`.
+- The `WINDOWS.md` rewrite — the hardware-run status lists and the `bash`
+  prerequisite for `pack:win`.
+
+Two files needed a manual merge, and both resolved by keeping the more
+detailed side and folding the other in. `WINDOWS.md` kept this PC's Developer
+Mode section, with the Mac session's Windows 10 22H2 confirmation and its
+`bash` paragraph folded into it. `verify-windows.ps1` kept this PC's
+`Resolve-ProfileName` helper plus the alternate-name display, alongside the
+Mac session's new stranded-focus check.
+
+One file was a genuine semantic conflict.
+
+## The conflict — `chrome.js`, and why the measured rule won
+
+Both sessions rewrote `urlMapForTitles`, and the two rewrites disagree about
+what the defect is.
+
+The Mac fix (`e7c36bc`) treats it as a small set of known-bad captions. It
+carries an `AMBIGUOUS_TITLES` blocklist — `New Tab`, `Google`, `Untitled`,
+`about:blank` and similar — refuses those outright, and keeps most-recent-wins
+for every other caption.
+
+The PC fix (`f2cacb2`) treats it as a property of the data, and was written
+after measuring that data. **The blocklist was dropped and the measured rule
+kept.** The reason is the 2026-08-14 measurement written up under *Item 5 —
+ambiguous captions* above, against this machine's real 11-profile `History`:
+
+- **4158 distinct titles; 27.5% of them match more than one URL.**
+- Among the multi-candidate titles, only **58%** resolve to the same page. The
+  rest name genuinely different pages, and **one in eight spans a different
+  host**.
+- A **65-character** caption still matched **21 URLs across two hosts**, so
+  length does not separate the safe cases from the dangerous ones either.
+
+Ambiguity is not a fixed list of generic strings. It is a quarter of every
+title on the machine, most of them ordinary page titles. A blocklist refuses
+the named few and then **still guesses** — most-recent-wins — on everything
+else, and the measurement says better than one guess in three is wrong.
+
+The measured rule subsumes the blocklist rather than competing with it. `New
+Tab` matches many different pages in `History`, so it splits, so it is refused
+— by the same rule that refuses the other few thousand, with no list for
+anyone to maintain as Chrome renames its surfaces.
+
+The final state is `electron/platform/chrome.js:129-207`. A caption resolves
+only when every `History` row sharing it has the same `pageIdentity` — scheme,
+host, path and fragment identical, only the `?query` free to differ.
+`profileDir` is `null` when the page is settled but several profiles have
+visited it, because picking one would be the same kind of guess.
+
+### What it costs, and what it gains
+
+Stated honestly, the cost is real. The measured rule refuses **more** rows
+than the blocklist does, and the refusals are not confined to captions anyone
+would recognise as generic. On `smoke-platform.js` on this machine — the
+2026-08-14 run written up under *What it costs* in Item 5 — URL recovery went
+from 5/5 to 2/5. All three refusals were checked by hand and all three
+are genuine — 37, 75 and 21 distinct URLs respectively, each set spanning two
+hosts — but a user does see three rows captured with a title and no URL where
+the blocklist would have written a URL into all three. Whether those
+title-only rows behave well from the renderer is still unverified; it is item 3
+on the manual test list above.
+
+The gain is that the wrong answers stop. And in one specific case the measured
+rule is strictly better than the blocklist rather than merely different: a
+window **actually showing google.com** is captioned `Google`. The blocklist
+refuses that row unconditionally, on the name. The measured rule looks at the
+data, finds every `Google` row in `History` is the google.com homepage, and
+recovers the URL correctly. Refusing on evidence beats refusing on a name.
+
+### The `http(s)` guard moved from the query to emission
+
+The Mac session's other change is kept, in a different place. It restricted
+the `History` query itself to `http(s)`. Here that restriction sits at
+emission instead:
+
+```js
+if (!/^https?:\/\//i.test(e.url)) continue;
+```
+
+The guarantee is identical — nothing but `http(s)` can ever be recovered, and
+everything else `SAFE_URL` would reject downstream is gone before it gets
+there. The placement matters because of the ambiguity rule. Filtering in the
+SQL hides a `chrome-extension://` row that shares a caption with a real page,
+and a hidden row cannot split the title. The caption then looks settled when
+it is not, and the refusal becomes a wrong answer. Filtering at emission lets
+non-http rows count toward ambiguity while never winning.
+
+### macOS safety of the resolution
+
+`urlMapForTitles` has one caller in the repo, `win32.js:195`. `darwin.js` does
+require `chrome.js`, but calls only `loadProfileCatalog`,
+`profileDirFromWindowTitle`, `profileMapForUrls` and `listProfiles`:
+
+```
+$ grep -n "chrome\." electron/platform/darwin.js
+158:  const catalog = chrome.loadProfileCatalog(CHROME_ROOT);
+162:    const dir = chrome.profileDirFromWindowTitle(w.title, catalog);
+186:  try { historyMap = await chrome.profileMapForUrls(CHROME_ROOT, chromeUrls); }
+247:    const dir = chrome.profileDirFromWindowTitle(t, byName);
+319:  return chrome.listProfiles(CHROME_ROOT);
+```
+
+None of those four functions changed in this reconciliation. The Mac session's
+23/23 smoke report exercised its own blocklist version of `urlMapForTitles`,
+which macOS never reaches; the functions macOS does reach are byte-identical
+before and after. So that report is not invalidated by dropping the blocklist,
+and macOS behaviour is unchanged.
+
+## The hardware re-tests `d39ecf3` asked for
+
+`d39ecf3` said its two `.ps1` changes were structurally checked only, and that
+the harness and focus enable/disable were the first real test. All of it is
+run below, on this machine, against the merged tree. **Every one passes.** The
+"not yet run on Windows" caveat at the top of this document is closed.
+
+### 1 — the harness
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\verify-windows.ps1
+```
+
+All seven sections **PASS**. Section 3 captured **6 windows in 724 ms**. The
+new stranded-focus-session check stayed silent, which is the correct result:
+no `PriorToastState` existed to be stranded. Section 6 printed
+
+```
+key exists, NOC_GLOBAL_SETTING_TOASTS_ENABLED not set yet (focus.ps1 will create it)
+```
+
+which is the machine baseline the next test depends on.
+
+### 2 — `focus.ps1` round trip, from a machine that has never set the value
+
+This is the case `e7c36bc` was written for, and the case the old code got
+wrong. Baseline: the value is absent.
+
+```
+before: toasts=<absent> prior=<absent>
+enable: ok
+after-enable: toasts=0 prior=absent
+disable: ok
+after-disable: toasts=<absent> prior=<absent>
+```
+
+The disable path writes `1`, then deletes the value. The key ends in the exact
+shape it started in, **including the absence**. Helm leaves nothing behind.
+
+### 3 — `focus.ps1` with a numeric prior, and the double-enable guard
+
+Pre-set `toasts=1`, then ran enable twice before disabling:
+
+```
+prior recorded as: 1; restored to: 1
+```
+
+The second enable did not overwrite the recorded prior with the `0` Helm
+itself had just written. That is the failure mode a naive record-before-write
+would have, and it is guarded.
+
+### 4 — `close.ps1` fail-closed, and a real close
+
+```
+close.ps1 -ProcessName notepad -TitleFilter 'No Such Window Title Anywhere'
+No matching windows
+```
+
+Notepad survived. Then:
+
+```
+close.ps1 -ProcessName notepad
+Closed 1
+```
+
+The process was gone. A filter matching nothing closes nothing; a filter
+matching something closes exactly that.
+
+### 5 — `close.ps1` on a Store app, the exact path `e7c36bc` changed
+
+Launched Calculator — process `CalculatorApp`, hosted by
+`ApplicationFrameHost`, the detached-`CoreWindow` case.
+
+```
+close.ps1 -ProcessName CalculatorApp
+Closed 1
+```
+
+The process was gone. CoreWindow-only frame matching works on the app it was
+narrowed for, so the narrowing did not break the legitimate case while closing
+the false positive.
+
+### 6 — the merged `chrome.js` under Electron
+
+Earlier the same day, before the rebase:
+
+```
+npx electron scripts\smoke-platform.js
+```
+
+returned **6 rows in 1173 ms**, with **1/1 URL recovery and 1/1 profile
+attribution** on the one open Chrome window. That run used this PC's
+`chrome.js` — the version that survived the rebase — so it describes the
+merged tree.
+
+## What is still not verified
+
+The reconciliation closes the `.ps1` caveats. It closes nothing else.
+
+- **Chrome-window teardown by `TitleFilter` against a real multi-profile
+  Chrome.** Never run on hardware. `close.ps1` is now exercised fail-closed, on
+  a win32 window and on a Store app, but the per-profile browser path — the one
+  that matters most, on the machine with 11 profiles — is still untested.
+- **Edge caption shapes.** Edge has still never been running during a capture,
+  so the regex tolerating a zero-width space has never met a real Edge caption.
+- **Everything already listed under "Not tested" and in the manual test list
+  above.** Nothing requiring a mouse or a keypress was exercised, here or in
+  either earlier session. The first four items on that list still gate the
+  port.

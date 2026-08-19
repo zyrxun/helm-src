@@ -1,10 +1,11 @@
-# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, commit and push)
+# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, reconcile with the Mac session)
 
 > Newest on top. Previous handoffs preserved below.
 
 Ran on Richard's Windows 10 PC, branch `windows-port`. This session closed out
-the 08-14 session's tree: everything below is now **committed and pushed to
-`windows-port`**.
+the 08-14 session's tree — everything below is **committed** — and then found
+that a Mac session had fixed the same three defects in parallel. The second
+half of the session was reconciling the two.
 
 ## What happened
 
@@ -29,12 +30,56 @@ the 08-14 session's tree: everything below is now **committed and pushed to
   in ~1.2 s, the one open Chrome window recovered URL + profile 1/1 through the
   new strict caption rule; the diffs match what the 08-14 handoff described.
 
+## Then: three new Mac commits appeared
+
+- **The fetch found `313648b`, `e7c36bc`, `d39ecf3`** (Mac, 2026-08-19). They
+  fix the same three defects this PC had just fixed — ambiguous captions,
+  `focus.ps1` not restoring the machine, `close.ps1` closing the wrong Store
+  app. Neither machine knew about the other.
+- **The five PC commits were rebased on top of `d39ecf3`.** They are now
+  `6fa840e` (welcome overflow-tray card + `open-taskbar-settings` IPC),
+  `f2cacb2` (ambiguous captions), `9253ecf` (capture DLL cache), `70dec9d`
+  (docs/harness), `09f1354` (second-session findings).
+- **Two files needed a manual merge**, both resolved by keeping the more
+  detailed side and folding the other in. `WINDOWS.md` — kept this PC's
+  Developer Mode section, folded in the Mac session's Windows 10 22H2
+  confirmation and its `bash` paragraph. `verify-windows.ps1` — kept
+  `Resolve-ProfileName` plus the alternate-name display, alongside the Mac
+  session's new stranded-focus check.
+- **`chrome.js` was the one semantic conflict**, and it was resolved by keeping
+  this PC's measured rule and **dropping the Mac session's `AMBIGUOUS_TITLES`
+  blocklist**. The measurement says ambiguity is not a fixed list of generic
+  captions — 27.5% of distinct titles match more than one URL, only 58% of
+  multi-candidate titles resolve to the same page, and a 65-character caption
+  matched 21 URLs across two hosts. A blocklist refuses the named few and still
+  guesses on the rest. The measured rule refuses `New Tab` on the data, needs
+  no list, and recovers google.com correctly on a window captioned `Google`,
+  which the blocklist refuses unconditionally. The Mac session's `http(s)`
+  restriction is folded in, moved out of the SQL into a guard at emission so
+  non-http rows still count toward ambiguity and can never win. Full argument
+  in `WINDOWS_FINDINGS.md`, "Third session".
+- **The hardware re-tests `d39ecf3` asked for all pass.** `verify-windows.ps1`
+  clears all seven sections (6 windows in 724 ms; the stranded-focus check
+  correctly silent). `focus.ps1` restores an absent value to absent, and a
+  numeric prior of `1` back to `1`, with the double-enable guard holding.
+  `close.ps1` is fail-closed on a non-matching `TitleFilter`, closes a real
+  Notepad window, and closes a Store app (`CalculatorApp`) through the
+  CoreWindow-only path. Transcripts are in the findings, not paraphrased, so
+  the Mac instance can read them without this terminal.
+- **A reconciliation commit** updates `WINDOWS_FINDINGS.md` (new "Third
+  session" section plus an update to the top blockquote), `WINDOWS.md` (the
+  overflow-tray section now records option 1 as implemented) and this file.
+
 ## Tree state
 
-Committed and pushed, in review-sized pieces: the welcome/tray-overflow work,
-the ambiguous-caption rule, the capture cache (now justified), the
-docs/harness pair, then findings + this handoff. `package-lock.json` remains
-modified-but-uncommitted — it predates all of this work; leave it alone.
+Committed in review-sized pieces: the welcome/tray-overflow work, the
+ambiguous-caption rule, the capture cache (now justified), the docs/harness
+pair, then findings + this handoff, all rebased onto `d39ecf3`, plus the
+reconciliation commit. **All of it is pushed to `origin/windows-port`.** The
+rebase happened before any push, so the remote never carried the pre-rebase
+commits and the push was a plain fast-forward. `package-lock.json` was
+stashed for the rebase and popped afterwards; it remains
+modified-but-uncommitted, it predates all of this work, leave it alone.
 Untracked scratch (`tmp-ambig.js`, `../.helm-scratch/ambig2.js`) kept, as
 before, because the ambiguity analysis is re-runnable from them.
 
@@ -44,7 +89,18 @@ Unchanged from 08-14, reproduced in `WINDOWS_FINDINGS.md` so it survives on
 its own: item 2 of the six (re-run stages 1 and 3 by hand) and the ranked
 manual test list, of which the first four gate the port — first-run tray-icon
 discoverability from a deleted `welcomed` marker, second-launch `win.show()`,
-title-only browser rows through the renderer, teardown with unsaved work.
+title-only browser rows through the renderer, teardown with unsaved work. The
+reconciliation does not touch any of these; they still need a mouse.
+
+## Next session
+
+1. The Mac instance should read the "Third session" section of
+   `WINDOWS_FINDINGS.md` before touching `chrome.js` again — it carries the
+   measurement, the transcripts and the reason the blocklist is gone.
+2. Two hardware gaps survive the re-tests: Chrome-window teardown by
+   `TitleFilter` against the real 11-profile Chrome, and Edge caption shapes
+   with Edge actually running during a capture. Both are runnable on this box
+   without a mouse and neither has been done.
 
 ---
 ---
