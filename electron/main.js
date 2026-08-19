@@ -701,6 +701,15 @@ ipcMain.handle('validate-license', async (_, key) => {
 
 ipcMain.handle('open-shortcuts-app', () => platform.openFocusHelp());
 
+// Windows 10 files every new tray icon into the overflow flyout and offers no
+// API to promote one, so the welcome flow hands the user the settings page that
+// can. The URI is a literal on purpose: nothing the renderer sends reaches
+// openExternal here. No-op off Windows, where the scheme does not exist.
+ipcMain.handle('open-taskbar-settings', () => {
+  if (!IS_WINDOWS) return;
+  shell.openExternal('ms-settings:taskbar');
+});
+
 ipcMain.handle('open-external', (_, url) => {
   if (!isSafeUrl(url)) return;
   shell.openExternal(url);

@@ -109,6 +109,28 @@
     }
 
     button:active { background: #B8922A; }
+
+    .card-action {
+      align-self: flex-start;
+      width: auto;
+      margin-top: 8px;
+      padding: 7px 12px;
+      background: transparent;
+      color: #D4AF6A;
+      border: 1px solid rgba(212,175,106,0.55);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .card-action:active { background: rgba(212,175,106,0.16); }
+
+    /* The two platforms put Helm in different places and grant permissions
+       differently, so some cards are true on only one of them. Default view is
+       macOS: a failed platform handshake degrades to the shipping platform
+       rather than to a window with no guidance in it. */
+    [data-platform="win32"] { display: none; }
+    body.platform-win32 [data-platform="win32"] { display: flex; }
+    body.platform-win32 [data-platform="darwin"] { display: none; }
   </style>
 </head>
 <body>
@@ -144,7 +166,21 @@
   <div class="wordmark">Helm</div>
   <div class="tagline">Take the wheel.</div>
 
-  <div class="card">
+  <div class="card" data-platform="win32">
+    <div class="arrow-wrap">⌃</div>
+    <div class="card-text">
+      <div class="card-title">Helm lives in the notification area</div>
+      <div class="card-body">
+        Look for the <span>ship's wheel icon</span> next to the clock. Windows files new icons
+        into the overflow menu behind the <span>chevron</span>, so Helm starts out in there.
+        Open Taskbar settings, find the notification area icon list, and turn Helm on to keep
+        it in view.
+      </div>
+      <button class="card-action" onclick="window.api.openTaskbarSettings()">Open Taskbar settings</button>
+    </div>
+  </div>
+
+  <div class="card" data-platform="darwin">
     <div class="arrow-wrap">↑</div>
     <div class="card-text">
       <div class="card-title">Helm lives in your menu bar</div>
@@ -155,7 +191,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-platform="darwin">
     <div class="arrow-wrap">⌘</div>
     <div class="card-text">
       <div class="card-title">Can't see it?</div>
@@ -165,7 +201,7 @@
     </div>
   </div>
 
-  <div class="card">
+  <div class="card" data-platform="darwin">
     <div class="arrow-wrap">🔐</div>
     <div class="card-text">
       <div class="card-title">Grant Accessibility access</div>
@@ -187,7 +223,7 @@
     </div>
   </div>
 
-  <div class="card" style="margin-bottom: 20px;">
+  <div class="card" data-platform="darwin" style="margin-bottom: 20px;">
     <div class="arrow-wrap">◐</div>
     <div class="card-text">
       <div class="card-title">Focus modes need a Shortcut</div>
@@ -206,5 +242,14 @@
   </div>
 
   <button onclick="window.close()">Got it</button>
+
+  <script>
+    (async () => {
+      try {
+        const info = await window.api.getPlatform();
+        if (info && info.id) document.body.classList.add('platform-' + info.id);
+      } catch (_) { /* keep the macOS cards */ }
+    })();
+  </script>
 </body>
 </html>
