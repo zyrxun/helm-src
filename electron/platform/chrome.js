@@ -126,69 +126,82 @@ async function profileMapForUrls(root, urls) {
   });
 }
 
-// Captions that many unrelated pages share. Recovery is title equality against
-// History, so these would bind to whichever row happened to be visited most
-// recently — silently writing an arbitrary page into a saved workflow. A row
-// with no URL is a much better outcome than a row with the wrong one: the user
-// sees an unresolved entry instead of trusting a link to somewhere they never
-// asked for. Match the browser's own placeholders only; anything longer is
-// specific enough that most-recent-wins is a fair bet.
-const AMBIGUOUS_TITLES = new Set([
-  'new tab',
-  'new incognito tab',
-  'untitled',
-  'about:blank',
-  'blank page',
-  'loading',
-  'loading...',
-  'google',
-  'error',
-  'problem loading page',
-  "can't reach this page",
-]);
-
-function isAmbiguousTitle(title) {
-  if (typeof title !== 'string') return true;
-  const t = title.trim().toLowerCase();
-  return t.length === 0 || AMBIGUOUS_TITLES.has(t);
+// Two URLs name the same page when they differ only in their query string.
+// Tracking, session and redirect parameters change from visit to visit while
+// the page a caption refers to stays put, so the query is the one component
+// worth ignoring; the fragment is not, because SPAs route on it.
+function pageIdentity(url) {
+  try {
+    const u = new URL(url);
+    return `${u.protocol}//${u.host.toLowerCase()}${u.pathname.replace(/\/+$/, '')}${u.hash}`;
+  } catch (_) {
+    return url;
+  }
 }
 
 // The Windows-only direction: given tab titles scraped from window titles,
-// recover each one's URL. Chrome records a title per visit, so an exact title
-// match against the most recent visit is a strong signal — a page whose title
-// you are looking at right now is almost always the newest row for that title.
+// recover each one's URL. Windows has no Apple Events, so the caption is the
+// only key available — but History is keyed by URL, not by title, and captions
+// are far from unique. Measured against a real 11-profile History: 27% of
+// distinct titles match more than one URL, and once a title has two candidates
+// only 58% of them are the same page; the rest are different pages, and one in
+// eight is on a different site. Title length does not separate the two cases —
+// a 65-character caption on that machine still matched 21 URLs across two
+// hosts.
 //
-// Returns title → {url, profileDir}. Misses are expected and are not errors:
-// a brand-new page may not be flushed to History yet, pages that never commit
-// a title never match, and ambiguous captions are refused outright above.
+// So "newest visit wins" is a guess, and a wrong guess is written silently
+// into a saved workflow and only surfaces when the workflow opens the wrong
+// page. A title therefore resolves only when every History row sharing it
+// names the same page. Everything else returns nothing and the row captures
+// with its title and no URL — the same outcome as a page History has not
+// flushed yet, which callers already handle. Non-http(s) rows count toward
+// ambiguity — a caption shared with a chrome:// or extension page could name
+// either window — but never win: SAFE_URL rejects those schemes downstream,
+// so recovering one would only smuggle a dead link into the row.
+//
+// Returns title → {url, profileDir}; profileDir is null when the page is
+// settled but several profiles have visited it, since picking one would be the
+// same kind of guess.
 async function urlMapForTitles(root, titles) {
-  const lookup = titles.filter(t => !isAmbiguousTitle(t));
+  const lookup = titles.filter(t => typeof t === 'string' && t.trim().length);
   if (!lookup.length) return new Map();
   if (!sqlite.available()) return new Map();
 
   return withHistoryCopies(root, async (copies) => {
-    const byTitle = new Map(); // title → {url, dir, time}
+    const byTitle = new Map(); // title → {url, dir, time, identity, split, dirs}
     const inClause = lookup.map(sqlite.quote).join(',');
     for (const { dir, db } of copies) {
+      // Deliberately unbounded: a row that would have been cut off is a row
+      // that could have revealed the title as ambiguous, so truncating here
+      // would turn a refusal into a wrong answer. The IN clause holds one
+      // entry per open browser window, so the result stays small.
       const rows = await sqlite.query(db,
-        // http(s) only. A browser row exists to reopen a web page, and the
-        // non-web schemes in History (chrome-extension://, chrome://, file://)
-        // are all rejected downstream by SAFE_URL anyway — matching one just
-        // costs the row the real URL it might otherwise have found.
         `SELECT title, url, last_visit_time FROM urls
-          WHERE title IN (${inClause}) AND last_visit_time > 0
-            AND (url LIKE 'http://%' OR url LIKE 'https://%')
-          ORDER BY last_visit_time DESC LIMIT 500;`);
+          WHERE title IN (${inClause}) AND last_visit_time > 0;`);
       if (!rows) continue;
       for (const [title, url, rawTime] of rows) {
         const t = parseInt(rawTime, 10);
         if (!title || !url || !Number.isFinite(t)) continue;
+        const identity = pageIdentity(url);
         const prev = byTitle.get(title);
-        if (!prev || t > prev.time) byTitle.set(title, { url, dir, time: t });
+        if (!prev) {
+          byTitle.set(title, { url, dir, time: t, identity, split: false, dirs: new Set([dir]) });
+          continue;
+        }
+        if (identity !== prev.identity) prev.split = true;
+        prev.dirs.add(dir);
+        if (t > prev.time) { prev.url = url; prev.dir = dir; prev.time = t; }
       }
     }
     const flat = new Map();
-    for (const [title, { url, dir }] of byTitle) flat.set(title, { url, profileDir: dir });
+    for (const [title, e] of byTitle) {
+      if (e.split) {
+        console.log('[chrome] caption matches more than one page, no URL recovered:', title);
+        continue;
+      }
+      if (!/^https?:\/\//i.test(e.url)) continue;
+      flat.set(title, { url: e.url, profileDir: e.dirs.size === 1 ? e.dir : null });
+    }
     return flat;
   });
 }
