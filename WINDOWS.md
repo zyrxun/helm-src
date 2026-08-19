@@ -164,16 +164,49 @@ These matter more on Windows than on macOS and were deliberate:
 npm install
 npm run menu-bar:win     # dev
 npm run pack:win         # NSIS installer + portable exe into dist/
+                         # requires Developer Mode — see the next section
 ```
 
-**`pack:win` needs Developer Mode enabled, or an elevated shell.**
+### Prerequisite for `pack:win`: Developer Mode, or an elevated shell
+
+`pack:win` cannot complete on a normal, non-elevated Windows account.
 electron-builder unpacks its `winCodeSign` toolchain before every Windows
-build, and that archive contains macOS `.dylib` symlinks. Creating a symlink on
-Windows requires `SeCreateSymbolicLinkPrivilege`, which an ordinary user does
-not hold. Without it the build retries four times and dies on
-`Cannot create symbolic link : A required privilege is not held by the client`.
-Confirmed on Windows 10 22H2, unelevated, Developer Mode off. `menu-bar:win`
-is unaffected — this is packaging only.
+build, and that archive contains macOS `.dylib` **symlinks**. Creating a
+symlink needs `SeCreateSymbolicLinkPrivilege`, which a standard user does not
+hold unless Developer Mode is on. Confirmed on Windows 10 22H2, unelevated,
+Developer Mode off; `menu-bar:win` is unaffected — this is packaging only.
+The build retries four times, then fails:
+
+```
+ERROR: Cannot create symbolic link : A required privilege is not held by the client.
+  : ...\winCodeSign\227697207\darwin\10.12\lib\libcrypto.dylib
+ERROR: Cannot create symbolic link : A required privilege is not held by the client.
+  : ...\winCodeSign\227697207\darwin\10.12\lib\libssl.dylib
+  • Above command failed, retrying 3 more times
+```
+
+Either of these fixes it:
+
+- **Enable Developer Mode** — Settings → Update & Security → For developers →
+  Developer Mode. It grants the privilege to the signed-in user and persists
+  across reboots. Preferred, because the build itself stays unelevated.
+- **Run `pack:win` from an elevated shell** — an Administrator PowerShell
+  already holds the privilege.
+
+Last resort, if neither is available: extract the `winCodeSign` archive into
+electron-builder's cache by hand
+(`%LOCALAPPDATA%\electron-builder\Cache\winCodeSign\`) with a tool that
+tolerates the failed symlinks, then re-run the build — it finds the cache
+populated and skips the unpack. This is per-machine state that the repo does
+not carry, and it has to be redone whenever electron-builder bumps the
+toolchain version. It is how the 1.0.3 Windows build was produced on the test
+machine; a build done this way has never been reproduced on a machine with
+Developer Mode on.
+
+Separately, some `windows-10\*.dll` files in the same archive fail to extract
+with `Access is denied`. That looks like antivirus rather than privilege, and
+it does not block the build — signing is skipped while the binaries are
+unsigned, so nothing reads those files.
 
 `pack:win` also needs `bash`, for the release audit hook. Git for Windows
 supplies one; `after-artifact-build.js` looks for it in the usual install

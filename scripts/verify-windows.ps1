@@ -146,6 +146,21 @@ foreach ($b in $browsers) {
 }
 
 # ── 5. Chromium profile catalog ──────────────────────────────────────────────
+# The display name here must be the one the app shows. `listProfiles()` in
+# electron/platform/chrome.js resolves `gaia_given_name`, falling back to
+# `name`, falling back to the directory; reading `name` alone made the harness
+# disagree with the app about the same profile, which defeats the point of a
+# harness. Keep this in step with chrome.js if that resolution ever changes.
+function Resolve-ProfileName($info, $dir) {
+    foreach ($field in @('gaia_given_name', 'name')) {
+        if ($info -and $info.PSObject.Properties[$field]) {
+            $v = $info.$field
+            if ($null -ne $v -and "$v" -ne '') { return "$v" }
+        }
+    }
+    return $dir
+}
+
 Section '5. Chromium profiles (Local State)'
 foreach ($b in $browsers) {
     $ls = Join-Path $b.Root 'Local State'
@@ -158,11 +173,18 @@ foreach ($b in $browsers) {
         foreach ($n in $names | Select-Object -First 10) {
             $hist = Join-Path (Join-Path $b.Root $n.Name) 'History'
             $has  = if (Test-Path $hist) { 'History OK' } else { 'NO History DB' }
-            # Same field precedence as listProfiles() in chrome.js. This harness
-            # is what you consult when the app looks wrong, so it has to name
-            # profiles the way the app does or it manufactures a discrepancy.
-            $display = if ($n.Value.gaia_given_name) { $n.Value.gaia_given_name } else { $n.Value.name }
-            Note "  $($n.Name)  ->  $display   [$has]"
+            $display = Resolve-ProfileName $n.Value $n.Name
+            $raw = $n.Value.name
+            # Both fields, when they differ, so a caption that carries the other
+            # one is still recognisable here.
+            $alt = if ($null -ne $raw -and "$raw" -ne '' -and "$raw" -ne $display) { "   (Local State name: $raw)" } else { '' }
+            Note "  $($n.Name)  ->  $display   [$has]$alt"
+        }
+        if ($names.Count -gt 10) { Note "  ... and $($names.Count - 10) more" }
+        $unlisted = @($names | Where-Object { $_.Name -notmatch '^(Default|Profile [0-9]+)$' })
+        if ($unlisted.Count -gt 0) {
+            $unlistedDirs = ($unlisted | ForEach-Object { $_.Name }) -join ', '
+            Note ("  the app's picker skips {0} of these -- directory name is not Default/Profile N: {1}" -f $unlisted.Count, $unlistedDirs)
         }
     } catch { Fail "$($b.Name): could not parse Local State"; Note $_.Exception.Message }
 }
