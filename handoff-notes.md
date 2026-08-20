@@ -1,4 +1,4 @@
-# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, reconcile with the Mac session)
+# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, reconcile with the Mac session, close the two hardware gaps)
 
 > Newest on top. Previous handoffs preserved below.
 
@@ -83,6 +83,13 @@ modified-but-uncommitted, it predates all of this work, leave it alone.
 Untracked scratch (`tmp-ambig.js`, `../.helm-scratch/ambig2.js`) kept, as
 before, because the ambiguity analysis is re-runnable from them.
 
+**Evening addendum.** `fef7a96` (the Edge caption fix) sits on top, plus the
+findings commit for the section it produced. One more untracked scratch file:
+`../.helm-scratch/probe-title.js`, which dumps a browser's per-profile
+`History` rows and runs one title through `urlMapForTitles` — the browser root
+and the title are constants at the top, edited per probe. It is how findings C
+and D were established, and it is re-runnable.
+
 ## Still open — needs Richard
 
 Unchanged from 08-14, reproduced in `WINDOWS_FINDINGS.md` so it survives on
@@ -92,15 +99,59 @@ discoverability from a deleted `welcomed` marker, second-launch `win.show()`,
 title-only browser rows through the renderer, teardown with unsaved work. The
 reconciliation does not touch any of these; they still need a mouse.
 
+## Later the same evening: both remaining hardware gaps closed
+
+Ran after the reconciliation commit, same machine, same branch.
+
+- **Chrome teardown by `TitleFilter` against the real multi-profile Chrome
+  passes.** Two sacrificial `example.com` windows in `Profile 1` and
+  `Profile 13`, alongside Richard's real YouTube window. A non-matching filter
+  printed `No matching windows` and closed nothing; filtering on `example.com`
+  printed `Closed 2` and took both sacrificial windows, one per profile, while
+  the YouTube window survived and Chrome stayed running.
+- **Edge captions met a real Edge.** The live caption was
+  `example.com and 2 more pages - Personal - Microsoft​ Edge` — tab count,
+  profile label and the zero-width space at once. The existing `titleSuffix`
+  regex handled the zero-width space, so that gap is closed as written, but the
+  tab-count and profile-label residue reached the History lookup and matched
+  nothing.
+- **One code fix came out of it: `fef7a96`** (`win32.js` only) adds
+  `edgeProfileLabels()` — which reads `shortcut_name`/`name`/`gaia_given_name`/
+  `gaia_name` from Edge's own `Local State`, a set `loadProfileCatalog` does not
+  collect — and `stripEdgeDecorations()`, which strips a trailing
+  ` - <label>` only when the label is one Edge declares, then strips
+  `and N more page(s)` by shape. Verified live through
+  `npx electron scripts\smoke-platform.js`: a fresh Edge window on
+  `https://www.wikipedia.org/` recovers URL and profile. Edge teardown verified
+  too — `close.ps1 -ProcessName msedge -TitleFilter 'Wikipedia'` printed
+  `Closed 1` and closed exactly that window.
+- **Two title-drift findings explain the remaining title-only rows.** YouTube
+  now stores its title with the unread counter prepended
+  (`(31) How To Effectively Use Ruby Thursday | …`) while the caption carries
+  none, so exact-match misses; and `example.com` does not resolve on this
+  network, so both browsers show a caption with no `History` row behind it.
+  Both fail toward a title-only row, which is correct.
+- **A findings commit** adds the "Third session, continued — 2026-08-20
+  evening" section to `WINDOWS_FINDINGS.md` with every transcript unparaphrased,
+  and rewrites that section's "What is still not verified" list, which had named
+  these two gaps.
+
 ## Next session
 
 1. The Mac instance should read the "Third session" section of
    `WINDOWS_FINDINGS.md` before touching `chrome.js` again — it carries the
    measurement, the transcripts and the reason the blocklist is gone.
-2. Two hardware gaps survive the re-tests: Chrome-window teardown by
-   `TitleFilter` against the real 11-profile Chrome, and Edge caption shapes
-   with Edge actually running during a capture. Both are runnable on this box
-   without a mouse and neither has been done.
+2. **Done, 08-20 evening.** The two hardware gaps that stood here — Chrome
+   teardown by `TitleFilter` against the real 11-profile Chrome, and Edge
+   caption shapes with Edge running — are both closed. See the section above,
+   and "Third session, continued" in `WINDOWS_FINDINGS.md` for the transcripts.
+3. What genuinely remains needs a mouse: the ranked manual test list, of which
+   the first four gate the port. Teardown with unsaved work is still among
+   them — `close.ps1` has now closed Notepad, Calculator, Chrome and Edge
+   windows, but never one holding a document that would raise a save prompt.
+4. One caveat from `fef7a96` is open by construction: the Edge tab-count strip
+   is English-only, so a localized Edge resurfaces the miss. Safe direction — a
+   title-only row — and it is recorded in the findings' unverified list.
 
 ---
 ---

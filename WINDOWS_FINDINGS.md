@@ -1375,15 +1375,213 @@ merged tree.
 
 ## What is still not verified
 
-The reconciliation closes the `.ps1` caveats. It closes nothing else.
+The reconciliation closes the `.ps1` caveats. The two browser gaps this list
+originally named were closed later the same evening — see **Third session,
+continued — 2026-08-20 evening** below. What remains:
 
-- **Chrome-window teardown by `TitleFilter` against a real multi-profile
-  Chrome.** Never run on hardware. `close.ps1` is now exercised fail-closed, on
-  a win32 window and on a Store app, but the per-profile browser path — the one
-  that matters most, on the machine with 11 profiles — is still untested.
-- **Edge caption shapes.** Edge has still never been running during a capture,
-  so the regex tolerating a zero-width space has never met a real Edge caption.
-- **Everything already listed under "Not tested" and in the manual test list
-  above.** Nothing requiring a mouse or a keypress was exercised, here or in
-  either earlier session. The first four items on that list still gate the
-  port.
+- **Everything requiring a mouse or a keypress.** Nothing on the manual test
+  list has been exercised, here or in either earlier session. The first four
+  items on that list still gate the port: first-run tray-icon discoverability
+  from a deleted `welcomed` marker, second-launch `win.show()`, title-only
+  browser rows through the renderer, and **teardown with unsaved work** —
+  `close.ps1` has now closed Notepad, Calculator, Chrome and Edge windows, but
+  never a window holding a document that would raise a save prompt.
+- **Edge captions in any locale but English.** The tab-count decoration is
+  stripped by an English shape (`and N more pages`). A localized Edge emits a
+  different phrase, the residue reaches the History lookup, and the row
+  captures title-only. Safe direction, still unverified.
+- **Everything already listed under "Not tested" above** that neither this
+  session nor the evening's tests touched.
+
+---
+
+# Third session, continued — 2026-08-20 evening: the two remaining hardware gaps
+
+Same machine, same branch, a few hours after the section above. The two gaps
+that list named — Chrome teardown by `TitleFilter` against the real
+multi-profile Chrome, and Edge caption shapes with Edge actually running — are
+both closed. One code fix came out of it (`fef7a96`, `win32.js` only) and four
+findings worth carrying forward.
+
+## Test 1 — Chrome teardown by `TitleFilter`, real multi-profile Chrome
+
+Setup: Richard's real Chrome was already running one window — a YouTube video,
+`Profile 1`. Two sacrificial windows were opened on `https://example.com/`, one
+landing in `Profile 1` and one launched with
+`--profile-directory="Profile 13"`. Chrome's `Local State` confirmed both
+profiles live: `last_active_profiles: Profile 1, Profile 13`, `last_used:
+Profile 13`. `capture.ps1` then enumerated three chrome windows:
+
+```
+example.com - Google Chrome
+example.com - Google Chrome
+How To Effectively Use Ruby Thursday | Marvel Contest of Champions - YouTube - Google Chrome
+```
+
+Fail-closed first:
+
+```
+close.ps1 -ProcessName chrome -TitleFilter 'No Such Window Title Anywhere'
+No matching windows
+```
+
+All three windows intact. Then the targeted close, filtering on the bare stored
+title, which prefix-matches the live captions:
+
+```
+close.ps1 -ProcessName chrome -TitleFilter 'example.com'
+Closed 2
+```
+
+Both sacrificial windows closed, one from each profile. The YouTube window
+survived untouched and Chrome stayed running. **The per-profile teardown
+mechanic works against the 11-profile machine.**
+
+Two findings fall out of this test.
+
+### Finding A — Chrome on Windows does not put the profile name in the caption
+
+Both `example.com` captions were identical. No ` – Richard`, no ` – xun`, with
+`Profile 1` and `Profile 13` simultaneously active. macOS Chrome appends the
+en-dash profile suffix, and `profileDirFromWindowTitle` in `chrome.js` parses
+exactly that suffix — but its only callers are in `darwin.js` (two of them), so
+the Windows port is unaffected by design. Windows profile attribution runs
+entirely through the History-unanimity rule in `urlMapForTitles`.
+
+Recorded so nobody later adds caption-suffix profile parsing on Windows
+expecting it to fire. It will not fire. There is no suffix to parse.
+
+### Finding B — a caption collision across profiles closes both windows
+
+The two `example.com` windows lived in different profiles and shared a caption,
+and the title-keyed filter closed both. Title is the only key Windows offers,
+so when two profiles show the same page a profile-scoped teardown cannot
+distinguish them.
+
+Known limitation, not a defect to fix at this level. It fails toward closing a
+same-titled window in a sibling profile — never toward closing an unrelated
+window.
+
+## Test 2 — Edge captions, with Edge actually running
+
+Edge (`msedge`, `Default` profile) was launched with two URLs in one window.
+The real caption, from `capture.ps1`:
+
+```
+example.com and 2 more pages - Personal - Microsoft​ Edge
+```
+
+Three decorations at once: the tab count (`and 2 more pages`), a profile label
+(`Personal`), and the zero-width space (U+200B) inside `Microsoft​ Edge`.
+
+**The zero-width space gap is closed: the existing `titleSuffix` regex handles
+it and strips.** But the residue `example.com and 2 more pages - Personal`
+reached the History lookup and matched nothing, so the Edge row captured
+without a URL. That is exactly the failure `WINDOWS_TESTING.md` ranks first
+among the riskiest assumptions.
+
+### The fix — `fef7a96`
+
+The profile label is not guesswork. Edge's `Local State` `info_cache` carries
+it as `shortcut_name` (`"Personal"`); the `name` field for the same profile
+says `"Profile 1"`, and `loadProfileCatalog` in `chrome.js` collects `name`,
+`gaia_given_name`/`gaia_name` and `user_name` — not `shortcut_name`. So the
+label Edge paints in the caption is declared by Edge itself, just not in a
+field the existing catalog reads. That made a declarative fix possible instead
+of fuzzy stripping.
+
+`fef7a96` adds two functions to `win32.js`:
+
+- `edgeProfileLabels(root)` — reads Edge's own `Local State` and collects
+  `shortcut_name`, `name`, `gaia_given_name`, `gaia_name` from every
+  `info_cache` entry into a set of declared display names. Read once per
+  capture, and only if an Edge row shows up.
+- `stripEdgeDecorations(title, labels)` — strips a trailing ` - <label>` only
+  when `<label>` matches one of those declared names, then strips
+  `and N more page(s)` by shape.
+
+Both run after `stripBrowserSuffix`, on `msedge` rows only, before the row
+reaches the History lookup.
+
+Two trade-offs, stated honestly:
+
+- **A tab title genuinely ending in ` - <profile label>` over-strips.** A page
+  actually titled `Notes - Personal` on this machine loses its last two words
+  and misses the History match. Judged acceptable: the label set is small and
+  machine-specific, and the failure is a title-only row.
+- **The count phrase is English-only.** A localized Edge emits a different
+  phrase, it survives stripping, and the row captures title-only. Again the
+  safe direction, and it is listed as unverified above.
+
+### Verified through the real pipeline
+
+`npx electron scripts\smoke-platform.js`, before the fix: the Edge row's label
+was `example.com and 2 more pages - Personal`, URL recovery 0. After the fix
+the label is bare. A fresh Edge window on `https://www.wikipedia.org/` then
+recovered fully:
+
+```
+Microsoft Edge [Default]      https://www.wikipedia.org/
+```
+
+URL recovered and profile attributed, through caption → strip → History
+unanimity. Final smoke score with three browser windows open: **1/3
+recovered** — the other two rows are title-only for the verified reasons in
+findings C and D below, not because the scheme failed.
+
+### Edge teardown, same session
+
+```
+close.ps1 -ProcessName msedge -TitleFilter 'Wikipedia'
+Closed 1
+```
+
+Exactly the Wikipedia window closed. The bare stored title prefix-matched the
+decorated live caption `Wikipedia - Personal - Microsoft​ Edge`, which is the
+same prefix-matching behaviour Test 1 relied on. The remaining Edge window
+closed with an unfiltered call:
+
+```
+close.ps1 -ProcessName msedge
+Closed 1
+```
+
+Six windowless `msedge` background processes remained afterwards. That is
+normal Edge startup-boost behaviour, not a teardown failure — none of them own
+a window, so none of them are visible to capture.
+
+## Two title-drift findings that explain the title-only rows
+
+### Finding C — History titles drift under notification counters
+
+The YouTube row recovered 1/1 this morning and 0/1 this evening, from the same
+caption. Probing History with `../.helm-scratch/probe-title.js` showed why. The
+stored title for `https://www.youtube.com/watch?v=EtTUOJtEfpw` is now:
+
+```
+(31) How To Effectively Use Ruby Thursday | Marvel Contest of Champions - YouTube
+```
+
+YouTube prepends its unread-notification counter to `document.title` and Chrome
+persisted that version. The live window caption carries no counter. Exact-match
+lookup misses.
+
+This is the safe direction — the row captures title-only, indistinguishable
+from a page History has not flushed yet. Fixing it means variant lookups, and
+variant lookups are the fuzzy matching `WINDOWS_TESTING.md` explicitly says to
+write up rather than invent. So: **written up as a known drift mode.** Any site
+that mutates its own `document.title` after load — unread counters, live
+scores, `(1)` message badges, playback state — can drift its History row out of
+reach of the caption.
+
+### Finding D — a page that never loads leaves a caption but no History row
+
+`example.com` does not resolve on this network. Both browsers showed the
+caption `example.com` — the host, rendered as an error-page title — while
+writing no `urls` row at all. Verified by querying every profile's `History` in
+both Chrome and Edge.
+
+A row like that can never recover a URL, under any scheme, because there is
+nothing to recover it from. Capturing it title-only is the correct outcome.
+Together with finding C it accounts for both unrecovered rows in the final
+1/3 smoke score.
