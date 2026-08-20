@@ -125,6 +125,38 @@ function stripBrowserSuffix(title, browser) {
   return String(title || '').replace(browser.titleSuffix, '').trim();
 }
 
+// Edge decorates its caption beyond the product name: the active tab title may
+// be followed by "and N more pages" and by the profile's display label, e.g.
+// "example.com and 2 more pages - Personal - Microsoft Edge". Both must go
+// before the History lookup, which is keyed on the bare tab title. The profile
+// label is stripped only when it matches a display name Edge's own Local State
+// declares (the caption uses shortcut_name, which loadProfileCatalog does not
+// collect) — stripping on shape alone would eat tab titles that happen to end
+// in " - <word>".
+function edgeProfileLabels(root) {
+  const labels = new Set();
+  try {
+    const data = JSON.parse(fs.readFileSync(path.join(root, 'Local State'), 'utf8'));
+    const cache = (data.profile && data.profile.info_cache) || {};
+    for (const info of Object.values(cache)) {
+      if (!info) continue;
+      for (const f of ['shortcut_name', 'name', 'gaia_given_name', 'gaia_name']) {
+        if (typeof info[f] === 'string' && info[f].trim()) labels.add(info[f].trim());
+      }
+    }
+  } catch (_) {}
+  return labels;
+}
+
+function stripEdgeDecorations(title, labels) {
+  let t = title;
+  if (labels.size) {
+    const escaped = Array.from(labels, s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    t = t.replace(new RegExp(`\\s+[-–—]\\s+(?:${escaped.join('|')})$`), '');
+  }
+  return t.replace(/\s+and\s+\d+\s+more\s+pages?$/i, '').trim();
+}
+
 async function capture() {
   const cacheDir = psCacheDir();
   const res = await runPowerShell(
@@ -147,6 +179,7 @@ async function capture() {
 
   const apps = [];
   const browserWindows = []; // resolved against History after the main pass
+  let edgeLabels = null;     // read once per capture, only if an Edge row shows up
 
   for (const row of rows) {
     if (!row || typeof row.process !== 'string') continue;
@@ -170,7 +203,11 @@ async function capture() {
 
     const browser = browserFor(proc);
     if (browser) {
-      const tabTitle = stripBrowserSuffix(title, browser);
+      let tabTitle = stripBrowserSuffix(title, browser);
+      if (tabTitle && proc === 'msedge') {
+        if (!edgeLabels) edgeLabels = edgeProfileLabels(browser.root);
+        tabTitle = stripEdgeDecorations(tabTitle, edgeLabels);
+      }
       if (tabTitle) {
         browserWindows.push({ browser, tabTitle, exePath });
       } else {
