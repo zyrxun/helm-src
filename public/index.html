@@ -2009,6 +2009,12 @@
       .map(a => {
         const entry = { name: String(a.name).slice(0, 128) };
         if (BROWSERS.has(a.name) && a.urlToOpen) entry.urlToOpen = String(a.urlToOpen).slice(0, 2048);
+        // Windows teardown targets the window by title and resolves the process by
+        // exePath, so both must be persisted; macOS matches by URL and is unchanged.
+        if (isWin()) {
+          if (a.label)   entry.label   = String(a.label).slice(0, 256);
+          if (a.exePath) entry.exePath = String(a.exePath).slice(0, 1024);
+        }
         return entry;
       });
     if (!openApps.length) {
