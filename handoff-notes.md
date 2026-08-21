@@ -1,6 +1,54 @@
-# Session Handoff — 2026-08-21 (the gating manual tests, run with Richard)
+# Session Handoff — 2026-08-22 (teardown defect fixes, fresh installers)
 
 > Newest on top. Previous handoffs preserved below.
+
+Ran on Richard's Windows 10 PC, branch `windows-port`, from `79b6714`. Two
+units of work, both verified in the main session before push.
+
+## What happened
+
+- **Both Item-4 teardown defects fixed (`8d8a3ee`, findings `5ee7091`,
+  pushed).** `close.ps1` now matches dirty-marker titles: both the filter and
+  the live title are also compared with one leading `*` / `●` / `•` (plus at
+  most one space) stripped, so a window retitled `*Untitled - Notepad` no
+  longer escapes the filter captured from its clean caption. Verified live
+  pre/post against a real dirty Notepad window (pre-fix: `No matching
+  windows`; post-fix: `Closed 1`, save prompt raised). And `win32.js` scales
+  the close timeout with the work — 8 s base + 4 s per extra title filter,
+  30 s cap, filterless calls get the cap — so three dirty windows no longer
+  exhaust a fixed 8 s budget mid-list. Both files Windows-only; no shared
+  file touched.
+- **`dist/` installers rebuilt via `pack:win` (2026-08-22 10:49), replacing
+  the stale 08-13 set.** The new builds carry everything since the first
+  hardware run — popover-window fixes, hotkey fixes, teardown fixes incl.
+  today's, the `protocols` key, and the R2-baked `app-update.yml` (verified
+  in `win-unpacked/resources`: generic provider, pub-…r2.dev). Secret-scan
+  audit: clean. `latest.yml` lists all three setups. Build log kept at
+  `logs/pack-win-2026-08-22.log`. Still unsigned — SmartScreen wall stands.
+
+## Open items
+
+- **Focus-mode end-to-end through run/teardown IPC**: this session's
+  permission layer refused to launch the test twice (it drives IPC handlers
+  and toggles the toast registry value), so the last sweep item is still
+  open. Either Richard runs it manually (attach Do Not Disturb to a
+  workflow, run, tear down, check `NOC_GLOBAL_SETTING_TOASTS_ENABLED`
+  restores to absent) or a future session gets it authorized.
+- **Manual install test now worth doing**: the `dist/` builds finally match
+  HEAD. Installing one also settles install-time `helm://` registration
+  (config verified present, registry effect untested) and the SmartScreen
+  interstitial wording.
+- **Signing is the launch blocker** — no Windows signing config exists;
+  owner decision (OV/EV cert or Azure Trusted Signing), see `WINDOWS.md:257`.
+- **R2 delivery**: owner must confirm the bucket receives the Windows
+  artifacts at next release (`upload-release.sh` now uploads them).
+- Standing: `package-lock.json` modified-uncommitted predates everything,
+  leave alone; `tmp-ambig.js` untracked, keep; `logs/webhelper.txt` is a
+  stray Steam log, ignorable; never push `master`.
+
+---
+
+# Session Handoff — 2026-08-21 (the gating manual tests, run with Richard)
 
 Ran on Richard's Windows 10 PC, branch `windows-port`, from `6ac8a09`. This
 session ran manual tests 1–3 interactively with Richard and delegated the
