@@ -1742,3 +1742,50 @@ Item 4's scripted half is done; the in-app half — a real teardown from the
 popover over an unsaved document — still needs a human, and after that the
 ~30-minute sweep: tray menu, popover position after the fix, hotkey, focus
 mode, `pack:win`, and the `helm://` cold start.
+
+## The popover was unusable as a window on Windows — three fixes
+
+Running the popover interactively surfaced a cluster of Windows-only window
+bugs that no code inspection had caught, because they only appear against a
+real taskbar and a real overflow tray. All three are fixed; the fixes are
+confirmed on screen by a human on this machine.
+
+**It opened clipped behind the taskbar, and could not be moved.** The popover
+positioned itself from `tray.getBounds()`, but a tray icon living in the `^`
+overflow flyout reports the flyout's bounds, not a taskbar slot, so the
+computed corner landed the window partly off-screen — with the footer and its
+buttons under the taskbar. Being a frameless, blur-to-hide popover, it could
+not be dragged back, and clicking elsewhere to try only dismissed it. Fixed in
+`getWindowPosition()` (`electron/main.js`): on Windows it now ignores the tray
+bounds entirely and anchors to the work-area corner nearest the cursor —
+`screen.getDisplayNearestPoint(getCursorScreenPoint()).workArea` — which
+already excludes the taskbar, so the window is always fully on screen. The
+branch is `IS_WINDOWS`-guarded; macOS keeps its tray-anchored maths.
+
+**Its footer was cut off with no way to scroll.** `public/index.html` locked
+both `body` and `.view` to `height: 480px` — exact for the macOS 320×480
+popover, but on the taller/resizable Windows window the view stayed pinned at
+480px inside a differently-sized viewport while `body { overflow: hidden }`
+prevented the region below the fold from scrolling. So the primary Launch /
+Add controls in `.helm-footer` were simply unreachable. Fixed by changing both
+heights to `100vh` (two lines). The layout was already a correct flex column
+with a `flex:1; overflow-y:auto` middle region (`.workflow-list`) and a pinned
+footer; the only defect was the container not tracking the real window height.
+macOS-neutral: in the 480px-tall Mac popover `100vh` evaluates to exactly
+480px, so a fitting layout is pixel-identical and only a too-tall one gains
+scroll — which it already could.
+
+**It behaved like a popover, not a window.** On macOS the popover is the right
+metaphor: frameless, anchored under a menu-bar item, gone on blur. On Windows
+the overflow-tray metaphor is weak and the frameless-anchored behaviour is what
+produced the two bugs above. `platform.windowOptions()` (`electron/platform/win32.js`)
+now returns `frame:true`, `resizable:true`, `skipTaskbar:false`, a
+`460×640` default and `380×460` minimums, so Windows gets a normal draggable,
+resizable, alt-tabbable window. The matching blur-to-hide handler in `main.js`
+is `IS_WINDOWS`-guarded off, because a real window that vanished the instant it
+lost focus would be unusable — and specifically would vanish the moment a
+teardown save prompt stole focus, which is exactly the flow test 4 exercises.
+On Windows the window now hides only via the tray toggle or its own close
+button. These options override the shared constructor's frameless defaults
+because `windowOptions()` is spread after them; macOS's `windowOptions()` sets
+none of these keys, so it keeps the frameless popover.

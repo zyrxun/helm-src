@@ -51,9 +51,25 @@ function hardenNavigation(bw) {
 }
 
 function getWindowPosition() {
-  const trayBounds   = tray.getBounds();
-  const windowBounds = win.getBounds();
   const { screen } = require('electron');
+  const windowBounds = win.getBounds();
+
+  // Windows tray-icon bounds are unreliable — an icon in the overflow flyout
+  // reports the flyout's position, not the taskbar slot, so the tray-anchored
+  // maths below can land the popover partly off-screen or behind the taskbar,
+  // where a frameless blur-to-hide window can't be dragged back into view.
+  // Anchor to the work-area corner nearest the cursor instead: the user just
+  // clicked the tray, so the cursor is over the right monitor, and workArea
+  // already excludes the taskbar so the popover is always fully clickable.
+  if (IS_WINDOWS) {
+    const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+    const margin = 8;
+    const x = area.x + area.width - windowBounds.width - margin;
+    const y = area.y + area.height - windowBounds.height - margin;
+    return { x, y };
+  }
+
+  const trayBounds   = tray.getBounds();
   const display = screen.getDisplayMatching(trayBounds).workArea;
 
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - windowBounds.width / 2);
@@ -206,7 +222,12 @@ app.whenReady().then(async () => {
 
   win.loadFile(path.join(__dirname, '../public/index.html'));
   hardenNavigation(win);
-  win.on('blur', () => win.hide());
+  // The macOS menu-bar popover hides as soon as it loses focus. The Windows
+  // build is a real draggable, resizable window, so blur-to-hide would fight
+  // dragging and resizing and make it vanish the moment the user clicks a save
+  // prompt behind it. On Windows it hides only via the tray toggle or its own
+  // close button.
+  if (!IS_WINDOWS) win.on('blur', () => win.hide());
 
   win.on('show', () => {
     if (!win.webContents.isDestroyed()) win.webContents.send('window-visibility', 'visible');

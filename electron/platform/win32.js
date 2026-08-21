@@ -375,12 +375,25 @@ function windowOptions() {
   // backgroundMaterial is mutually exclusive with transparent:true. On Win11
   // this gives the frosted popover that matches the macOS vibrancy; on Win10
   // it is ignored and the window falls back to solid Abyss, which is on-brand.
+  // Windows gets a real draggable, resizable window rather than the macOS
+  // frameless menu-bar popover. The overflow-tray metaphor is weak on Windows
+  // and the anchored frameless popover clipped its own footer off-screen with
+  // no way to drag or resize it back. A framed window with a title bar can be
+  // moved, resized and alt-tabbed to. These override the constructor's
+  // width/height/frame/resizable because platform.windowOptions() is spread
+  // after them.
   return {
+    width: 460,
+    height: 640,
+    minWidth: 380,
+    minHeight: 460,
+    frame: true,
+    resizable: true,
+    skipTaskbar: false,
     transparent: false,
     backgroundColor: '#0A1628',
     backgroundMaterial: 'acrylic',
     roundedCorners: true,
-    skipTaskbar: true,
   };
 }
 
