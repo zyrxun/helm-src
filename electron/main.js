@@ -138,7 +138,12 @@ if (IS_WINDOWS) {
     app.on('second-instance', (_event, argv) => {
       const link = argv.find(a => typeof a === 'string' && a.startsWith('helm://'));
       if (link) handleDeepLink(link);
-      else if (win) { win.show(); win.focus(); }
+      else if (win) {
+        const { x, y } = getWindowPosition();
+        win.setPosition(x, y, false);
+        win.show();
+        win.focus();
+      }
     });
   }
 }
