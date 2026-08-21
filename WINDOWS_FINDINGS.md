@@ -1885,3 +1885,41 @@ combo the pill still shows it as set while the key does nothing. The
 mode-toggle path does surface this ("Could not register shortcut...",
 `main.js:600`, `index.html:1196`). Worth aligning the workflow path to the same
 feedback, but it was not forced during this pass.
+
+## Sweep — capture to teardown loop: a real teardown bug found and fixed
+
+Running the capture -> save -> run -> teardown loop live surfaced a genuine
+Windows-only defect (fixed in commit 7e2d36d).
+
+**Bug: Chrome teardown closed every Chrome window, not the captured one.** A
+workflow was saved with a Chrome tab set to teardown. On teardown, every open
+Chrome window closed. Root cause was in the renderer save path, not the close
+logic: `saveWorkflow` built each `closeApps` entry with only `name` and (for
+browsers) `urlToOpen` (`public/index.html:2007-2013`). macOS teardown matches a
+tab by URL through Apple Events, so that was enough there — but Windows
+`close()` scopes the window by title (`target.label`) and resolves the process
+by `exePath` (`win32.js:328-346`). With neither field persisted, the browser
+branch passed no `-TitleFilter`, so `close.ps1` sent WM_CLOSE to every window of
+the `chrome` process. (Same gap would leave a non-browser teardown unable to
+resolve its process name at all, since `processNameFor` needs `exePath`.)
+
+Confirmed by inspecting the saved workflow on disk: its `closeApps` entry was
+`{ name, urlToOpen }` with no `label`/`exePath`. Patching those two fields into
+the stored entry made teardown close only the matching window, with other
+Chrome windows surviving — proving the diagnosis before the code change.
+
+**Fix:** persist `label` and `exePath` on each `closeApps` entry, guarded by
+`isWin()` so macOS-saved workflows are byte-for-byte unchanged
+(`public/index.html:2014-2017`). `main.js closeTargetFrom` already reads and
+validates both fields (`main.js:489`); they were simply never written.
+
+**Remaining behavior is the documented Windows floor, not a bug:** teardown
+closes the whole *window* showing the captured page, taking any sibling tabs in
+it. Windows has no per-tab close API (`perTabClose:false`, `win32.js:424`), so
+window granularity is the best achievable without a Chrome extension or the
+DevTools protocol. Product note: because Windows cannot do per-tab teardown, a
+row whose captured window holds multiple tabs should ideally warn the user that
+teardown closes the whole window on Windows.
+
+Loop status: capture produced correct rows (Notepad with exePath+label; Chrome
+with recovered URL + Profile N), save worked, and teardown now scopes correctly.
