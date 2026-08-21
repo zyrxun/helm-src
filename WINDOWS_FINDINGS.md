@@ -1824,3 +1824,16 @@ not a defect.
 This closes item 4 end to end: the scripted half (no hang, send-count
 semantics, serial blocking, the dirty-title asterisk defect) and now the in-app
 half (visible prompt, Cancel preserves work).
+
+## Sweep — tray interaction: pass
+
+First items of the ~30-minute sweep, run by hand on this machine:
+
+- **Left-click the tray icon toggles the popover** both ways — open and hide —
+  reliably.
+- **Right-click shows the context menu** with exactly `Open Helm` and `Quit`
+  (`main.js:179-185`). `Open Helm` opens the popover; `Quit` exits Helm
+  completely, tray icon gone, no lingering `electron.exe`.
+
+All four steps passed. Tray click, right-click menu, and clean quit are
+verified on hardware.
