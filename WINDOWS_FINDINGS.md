@@ -1837,3 +1837,51 @@ First items of the ~30-minute sweep, run by hand on this machine:
 
 All four steps passed. Tray click, right-click menu, and clean quit are
 verified on hardware.
+
+## Sweep — global hotkey: pass, after fixing two Windows regressions
+
+Exercised on hardware. Both hotkey paths — the per-workflow hotkey and the
+mode-toggle hotkey — now register and fire correctly on Windows. Getting there
+uncovered and fixed two Windows-only defects (commit c5b1fe0).
+
+**1. The framed window's default menu bar swallowed keystrokes.** Making the
+Windows window framed (`frame:true`) caused Electron to attach its default
+application menu (File/Edit/View...). On Windows that menu bar is visible and
+its Alt activation intercepts keyboard input, so the in-renderer hotkey
+recorder could not capture any combo — the pill sat on "..." and nothing
+recorded. Fix: `win.removeMenu()` + `autoHideMenuBar` guarded by `IS_WINDOWS`
+(`electron/main.js:223-226`). macOS is frameless with a global menu and is
+untouched. After the fix the recorder captures normally (Ctrl+M, Ctrl+Shift+J
+verified live).
+
+**2. Ctrl+Alt combos cannot be recorded on Windows (AltGr).** Ctrl+Alt maps to
+AltGr; the OS consumes the combo before the renderer sees the keydown, so
+Ctrl+Alt+<key> never reaches the recorder (no capture, no toast — confirmed by
+Ctrl+Alt+J doing nothing while Ctrl+Shift+J recorded). This is a hard Windows
+constraint, not a Helm bug. Two follow-on issues fixed: the Windows modifier
+hint used to read "Include at least one modifier key (Ctrl, Alt, Shift)" —
+actively steering users toward the one modifier that fails — now reads "Use
+Ctrl or Shift. Windows reserves Ctrl+Alt, so it will not record."
+(`public/index.html:1119`); and `AltGraph` was added to both capture handlers'
+modifier-ignore lists (`public/index.html:1178,1212`) so a stray AltGr press
+cannot be mis-captured as the key. Note the marketing examples `Ctrl+Alt+1/2/3`
+(from the mac `⌃⌥1/2/3`) are un-recordable on Windows and should be reworded
+for Windows copy.
+
+**Both paths verified end to end:**
+- **Mode-toggle hotkey** recorded as `Control+Shift+M` and flips Launch/Teardown
+  from the background.
+- **Workflow hotkey**: the saved "hi" workflow was rebound from the broken
+  `Control+Alt+K` to `Control+Shift+K` (edited directly in the dev
+  `workflows.json`); pressing it with Helm backgrounded launched Notepad. This
+  exercises the full workflow-hotkey path on Windows — startup registration in
+  `registerWorkflowShortcuts` (`main.js:548`) through spawn/launch.
+
+**Still-open code concern (not triggered here):** workflow-hotkey registration
+failure is silent. `registerWorkflowShortcuts` ignores the boolean from
+`globalShortcut.register` (`main.js:553`) and `set-hotkey` returns `{ok:true}`
+unconditionally (`main.js:712`), so if Windows or another app already owns a
+combo the pill still shows it as set while the key does nothing. The
+mode-toggle path does surface this ("Could not register shortcut...",
+`main.js:600`, `index.html:1196`). Worth aligning the workflow path to the same
+feedback, but it was not forced during this pass.
