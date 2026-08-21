@@ -328,6 +328,11 @@ function prepareCloseContext() {
   return Promise.resolve({});
 }
 
+const TITLE_FILTER_SEP = String.fromCharCode(31);
+const CLOSE_TIMEOUT_BASE_MS = 8000;
+const CLOSE_TIMEOUT_PER_TITLE_MS = 4000;
+const CLOSE_TIMEOUT_CAP_MS = 30000;
+
 async function close(target) {
   const procName = processNameFor(target);
   if (!procName) return;
@@ -343,11 +348,25 @@ async function close(target) {
   // browser (and on Edge, the profile name and an "and N more pages" count)
   // appended. Rebuilding that suffix here would be guesswork, so close.ps1
   // matches on prefix instead.
+  let titleCount = 0;
   if (browser && target.label) {
     args.push('-TitleFilter', target.label);
+    titleCount = target.label.split(TITLE_FILTER_SEP).filter(Boolean).length;
   }
 
-  await runPowerShell(scriptPath('close.ps1'), args, { timeout: 8000 });
+  // close.ps1 sends WM_CLOSE window by window, and a window with unsaved work
+  // holds the SendMessageTimeout for its full 3 s before its save prompt
+  // appears — so a fixed budget silently drops the tail of the close list
+  // exactly when the user's work is on the line. Budget for the work instead:
+  // 8 s covers PowerShell start-up plus one dirty window, each further title
+  // adds 4 s (3 s blocked plus slack), and a filterless call gets the cap
+  // because it messages every window the process owns, a count Helm cannot
+  // know from here. The cap keeps a wedged run bounded.
+  const timeout = titleCount > 0
+    ? Math.min(CLOSE_TIMEOUT_CAP_MS, CLOSE_TIMEOUT_BASE_MS + CLOSE_TIMEOUT_PER_TITLE_MS * (titleCount - 1))
+    : CLOSE_TIMEOUT_CAP_MS;
+
+  await runPowerShell(scriptPath('close.ps1'), args, { timeout });
 }
 
 // ── Focus modes ───────────────────────────────────────────────────────────────

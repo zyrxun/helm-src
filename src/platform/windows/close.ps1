@@ -21,6 +21,11 @@
 # window title appends the browser name and, on Edge, the profile and an
 # "and N more pages" count. Requiring equality would mean browser teardown
 # silently never fired.
+#
+# Both sides are also compared with a leading unsaved-changes marker removed,
+# because an app renames its window the moment work is unsaved — Notepad shows
+# `*Untitled - Notepad`, VS Code `● file.js - …` — which is precisely when
+# closing the right window matters most.
 
 param(
     [Parameter(Mandatory = $true)][string]$ProcessName,
@@ -133,11 +138,32 @@ if ($procs.Count -eq 0) {
 $pids = [uint32[]]($procs | ForEach-Object { [uint32]$_.Id })
 $windows = [HelmClose]::TopLevelFor($pids)
 
+# Strips one leading dirty marker: `*` (Notepad and most editors), `●`
+# (VS Code) or `•`, plus at most one space after it. Exactly one character,
+# only at position 0, and never down to an empty string: a window title is not
+# a pattern, so `Multiply * Divide` must keep its asterisk and a window
+# literally titled `*` must not become a filter that prefixes everything.
+function Get-UnmarkedTitle([string]$s) {
+    if ([string]::IsNullOrEmpty($s) -or $s.Length -lt 2) { return $s }
+    $c = $s[0]
+    if ($c -ne '*' -and $c -ne ([char]0x25CF) -and $c -ne ([char]0x2022)) { return $s }
+    $rest = $s.Substring(1)
+    if ($rest.StartsWith(' ', [StringComparison]::Ordinal)) { $rest = $rest.Substring(1) }
+    if ($rest -eq '') { return $s }
+    return $rest
+}
+
+# Each filter contributes its raw form and, when it differs, its unmarked form:
+# a filter captured while the window was dirty carries a marker the window may
+# no longer have.
 $wanted = $null
 if ($TitleFilter -ne '') {
     $wanted = @()
     foreach ($t in $TitleFilter.Split([char]31)) {
-        if ($t -ne '') { $wanted += $t }
+        if ($t -eq '') { continue }
+        if ($wanted -notcontains $t) { $wanted += $t }
+        $bare = Get-UnmarkedTitle $t
+        if ($bare -ne '' -and $wanted -notcontains $bare) { $wanted += $bare }
     }
     if ($wanted.Count -eq 0) { $wanted = $null }
 }
@@ -146,15 +172,21 @@ $closed = 0
 foreach ($h in $windows) {
     if ($null -ne $wanted) {
         $title = [HelmClose]::TitleOf($h)
+        $forms = @($title)
+        $bareTitle = Get-UnmarkedTitle $title
+        if ($bareTitle -ne $title) { $forms += $bareTitle }
         $hit = $false
         foreach ($t in $wanted) {
-            # StartsWith, not -like: the filter is a window title and may legally
-            # contain *, ? and [ ], which -like would treat as wildcards and
-            # match far more windows than intended.
-            if ($title -eq $t -or $title.StartsWith($t, [StringComparison]::Ordinal)) {
-                $hit = $true
-                break
+            foreach ($form in $forms) {
+                # StartsWith, not -like: the filter is a window title and may legally
+                # contain *, ? and [ ], which -like would treat as wildcards and
+                # match far more windows than intended.
+                if ($form -eq $t -or $form.StartsWith($t, [StringComparison]::Ordinal)) {
+                    $hit = $true
+                    break
+                }
             }
+            if ($hit) { break }
         }
         if (-not $hit) { continue }
     }
