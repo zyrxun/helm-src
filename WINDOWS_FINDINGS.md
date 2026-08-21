@@ -1789,3 +1789,38 @@ On Windows the window now hides only via the tray toggle or its own close
 button. These options override the shared constructor's frameless defaults
 because `windowOptions()` is spread after them; macOS's `windowOptions()` sets
 none of these keys, so it keeps the frameless popover.
+
+## Item 4, in-app half — pass, and the save prompt is not buried after all
+
+With Pro unlocked in the dev build, teardown was run from the popover against a
+Notepad window holding genuinely unsaved text. Both halves of the finding
+resolved in the user's favour:
+
+- **The save prompt came up in front and immediately visible** — not buried.
+  The scripted half of this test (earlier this session, agent-run) predicted
+  the `#32770` prompt would open *behind* the foreground window because it
+  inherits the target's activation and Helm tears down from an unfocused tray
+  popover. That prediction was made before the popover became a real framed,
+  taskbar-present, non-blur-hiding window. With that window in place the prompt
+  surfaced in front on this machine. So the buried-prompt risk is specific to
+  the old frameless-popover configuration; the framed Windows window this
+  session shipped removes it. Recorded as reconciled: the scripted prediction
+  stands for the old window, the hardware result supersedes it for the new one.
+- **Cancel preserved the work.** Clicking Cancel in the prompt kept the Notepad
+  text intact — the teardown did not destroy unsaved work.
+
+**There is no Helm-level undo for teardown, and that is by design.** While
+verifying this, the "Undo" control was checked against the source: the only
+Undo in Helm is the 2.25-second grace toast on *workflow deletion*
+(`public/index.html:2143-2172`), which holds the delete and lets the user
+cancel it. Teardown has no equivalent — once an app is closed it is closed, and
+`close.js` keeps no reopen list. The app's own save prompt is the sole
+safeguard for unsaved work during teardown, which the pass above confirms is
+sufficient for the Notepad case. Worth a product note: a future teardown could
+offer its own "closed 3 apps — undo" toast that re-launches what it just
+closed, mirroring the deletion affordance, but that is a feature suggestion,
+not a defect.
+
+This closes item 4 end to end: the scripted half (no hang, send-count
+semantics, serial blocking, the dirty-title asterisk defect) and now the in-app
+half (visible prompt, Cancel preserves work).
