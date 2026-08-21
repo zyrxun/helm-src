@@ -682,6 +682,14 @@ ipcMain.handle('save-workflow', (_, workflow) => {
         ? { closeApps: workflow.closeApps.map(a => ({
             name: String(a.name).slice(0, 128),
             ...(a.urlToOpen && isSafeUrl(a.urlToOpen) ? { urlToOpen: a.urlToOpen } : {}),
+            // Windows teardown scopes the window by title (label) and resolves the
+            // process by exePath. The renderer only sends these on Windows, so on
+            // macOS both conditionals collapse to nothing and URL-matched teardown
+            // there is unchanged. Without persisting them here, save silently
+            // dropped the fields and Windows teardown fell back to WM_CLOSE on
+            // every window of the process (mirrors the apps[] mapping above).
+            ...(a.label ? { label: String(a.label).slice(0, 256) } : {}),
+            ...(a.exePath && isSafeExePath(a.exePath) ? { exePath: a.exePath } : {}),
           })) }
         : {}),
     };

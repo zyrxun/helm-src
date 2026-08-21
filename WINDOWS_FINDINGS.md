@@ -1923,3 +1923,156 @@ teardown closes the whole window on Windows.
 
 Loop status: capture produced correct rows (Notepad with exePath+label; Chrome
 with recovered URL + Profile N), save worked, and teardown now scopes correctly.
+
+## Sweep - helm:// deep link: coded correctly, one packaging gap
+
+The Windows deep-link path is fully written and Windows-gated, and matches the
+design in `WINDOWS.md:85`. Re-verified against `electron/main.js` on disk:
+
+- **Registration** (`main.js:116-122`): dev vs packaged is split correctly. A
+  dev run registers `electron.exe <main.js> "%1"` via `process.execPath` +
+  `process.argv[1]`; a packaged build registers the bare scheme. Confirmed live:
+  `HKCU\Software\Classes\helm\shell\open\command` currently reads
+  `"...\electron.exe" "...\electron\main.js" "%1"` - exactly the dev form.
+- **Warm-start** (`main.js:150-165`): single-instance lock + `second-instance`
+  pulls the URL out of the relaunched `argv` with
+  `argv.find(a => a.startsWith('helm://'))` and dispatches `handleDeepLink`. The
+  macOS `open-url` event (`main.js:145-148`) never fires on Windows; the two OSes
+  use distinct, mutually exclusive paths.
+- **Cold-start** (`main.js:192-195`, inside `whenReady`, after the license
+  phase): parses `process.argv` for the `helm://` URL so a link that *launches*
+  Helm is handled. Runs after `isPro` is known so the anti-hijack guard applies.
+- **What a link does** (`handleDeepLink`, `main.js:124-140`): only
+  `helm://activate?key=...`. Requires `hostname === 'activate'` + a `key`. If
+  already Pro it refuses and sends `DEEPLINK_ACTIVATE_IGNORED` (toast at
+  `index.html:2271-2275`) - a deliberate drive-by-deactivation guard. No
+  workflow-run or page-open deep links exist.
+
+**GAP (packaging, not runtime): no `protocols` key in the electron-builder
+`build` config** (grep confirms absent in `package.json`). The `helm://`
+association is written only at runtime by `setAsDefaultProtocolClient`
+(`main.js:121`), i.e. on first launch, into HKCU. Consequence: a freshly
+*installed* packaged Helm that has **never been launched** has no `helm://`
+handler, so an activation link (emailed to brand-new buyers - exactly the
+never-launched cohort) resolves to "no app associated." Dev mode self-registers
+every run and structurally cannot reproduce this. Fix is a one-line
+`protocols: [{ name, schemes: ["helm"] }]` addition - but electron-builder's
+top-level `protocols` also writes the macOS Info.plist `CFBundleURLTypes`, so it
+is **not** provably macOS-neutral and needs founder sign-off before adding
+(macOS is the release-blocking path).
+
+Never-run-on-hardware status stands: the warm-start `argv.find` branch and the
+cold-start parse have never been exercised with a real `helm://` URL on Windows
+(riskiest assumption #5). Manual test: with the dev app running, fire
+`Start-Process "helm://activate?key=TESTKEY123"`; a Pro (hooked) instance should
+show the "link tried to change your license - ignored" toast, a non-Pro instance
+should log `[deep-link] activate failed:`. Cold-start: quit Helm fully, fire the
+same link, expect the tray to appear plus the same log line.
+
+## Sweep - installer + SmartScreen: installer exists, unsigned = SmartScreen wall
+
+The installers are built and on disk (`dist/`, dated 2026-08-13), verified by
+listing: `Helm-1.0.3-x64-setup.exe` (101,554,840 B, the sweep reference),
+`-arm64-setup.exe`, the combined dual-arch `Helm-1.0.3-setup.exe`,
+`-x64-portable.exe`, plus `latest.yml`. electron-builder config
+(`package.json` `build`): `appId com.helm.app`, icon set
+(`public/brand/icon.ico`), NSIS `oneClick:true perMachine:false` (per-user, no
+UAC), artifact name `${productName}-${version}-${arch}-setup.${ext}`. Build/
+rebuild command is `npm run pack:win` (`tsc && electron-builder --win
+-c.npmRebuild=false`).
+
+**Finding - the build is UNSIGNED (launch blocker).** No Windows signing config
+of any kind exists (no `certificateFile`, `signtool`, Azure Trusted Signing, no
+`CSC_LINK`). The `afterSign` hook is the macOS notarize script, which no-ops off
+darwin. So on download/run of the `.exe`, Windows Defender SmartScreen shows the
+blue "Windows protected your PC - unrecognized app" interstitial; the user must
+click More info -> Run anyway, and the publisher line reads "Unknown publisher."
+No UAC prompt (per-user oneClick), but the SmartScreen wall stands. Mitigations
+(EV cert / OV cert / Azure Trusted Signing) are documented in `WINDOWS.md:257`
+but **none are configured**. Nobody has yet observed the actual interstitial on
+this machine, so its exact wording on Win10 22H2 is still unconfirmed. Note: a
+local copy run directly may not carry Mark-of-the-Web; to see the true download
+interstitial the exe must be fetched from a web origin.
+
+**Same `protocols` gap applies to the installer** (see deep-link section): the
+NSIS installer registers no `helm://` association, so a packaged install only
+gains the handler after first launch.
+
+**Publish-target inconsistency (worth reconciling):** `build.publish` and the
+baked `app-update.yml` point at GitHub `zyrxun/helm-releases`, while
+CLAUDE.md/`WINDOWS.md:271-272` describe Windows auto-update served from the R2
+`helm-updates` bucket. The two disagree; resolve before relying on Windows
+auto-update.
+
+## Teardown fix was incomplete - the save handler also stripped label/exePath
+
+Follow-up to the teardown fix in commit 7e2d36d. That commit fixed the renderer
+(`index.html:2014-2017`) to build `closeApps` entries with `label`+`exePath` on
+Windows, but the authoritative sink - the `save-workflow` IPC handler in
+`main.js` - rebuilt every `closeApps` entry as **only** `{name, urlToOpen}`
+(`main.js:682-685`), discarding both fields before writing to disk. So a
+workflow saved through the UI still lost `label`/`exePath`, and Windows teardown
+fell back to WM_CLOSE on every window of the process.
+
+The reason the earlier live test appeared to pass is that the test workflow "d"
+was hand-patched on disk (via Node) to add the two fields, bypassing the save
+handler entirely. Re-saving that workflow through the UI would have regressed it.
+
+**Fix:** the `save-workflow` `closeApps` mapping now also persists
+`label` and `exePath`, mirroring the `apps[]` mapping directly above it
+(`main.js:665-676`) and guarded by the same truthiness conditionals. Because the
+renderer only sends these fields on Windows (`index.html:2014` `if (isWin())`),
+the two conditional spreads collapse to nothing on macOS input, so macOS-saved
+`closeApps` are byte-for-byte unchanged. `node --check` passes. Takes effect on
+next app restart (the running dev instance still holds the pre-fix main.js).
+
+## Sweep - focus mode: wired and correct, one UI end-to-end test left
+
+Focus mode is live on Windows through the shared `platform.*` dispatch, not a
+no-op. On Windows it is a single mode, "Do Not Disturb"
+(`win32.js:353-355`, capability `focusModes: 'single'` at `win32.js:426`);
+`setFocusMode` ignores the mode name and runs `focus.ps1 enable|disable`
+(`win32.js:357-360`), which toggles the global toast DWORD
+`NOC_GLOBAL_SETTING_TOASTS_ENABLED` and records the prior state (including the
+literal "absent") in `HKCU:\SOFTWARE\Helm\PriorToastState` so teardown restores
+the key to its exact prior shape (the previously-fixed "left as 1" bug). Wired
+into run (`main.js:539-548`) and teardown (`main.js:467-474`).
+
+The macOS Shortcuts copy in the settings HTML (`index.html:953-968`) is
+**correctly guarded**, not a UX bug: `applyPlatformChrome()` swaps
+`#s-focus-help` to the Windows text when `capabilities.focusModes === 'single'`
+(`index.html:2389-2395`). Minor and appropriate: the swap uses `textContent`, so
+the inline "Open Shortcuts app" link is dropped on Windows (there is no such
+app).
+
+Verdict: pass on inspection. The one thing still unverified is focus mode
+**end-to-end from the UI** - prior verification drove the registry round-trip
+directly through `platform.*`, not by running a saved workflow. Manual test:
+attach "Do Not Disturb" to a workflow, run it, confirm toasts are suppressed and
+`NOC_GLOBAL_SETTING_TOASTS_ENABLED = 0`; tear down, confirm toasts return and
+the registry key is restored to its exact prior shape (value deleted if it was
+absent before).
+
+## Sweep - title-only Chrome rows + profile picker: renderer OK, launch gap found
+
+The renderer half of Test 3 (previously unjudged) checks out. A no-URL Chrome row
+(ambiguous-caption case: label, no url, no profile) renders cleanly - the label
+shows as the context line (`index.html:1758-1760`), the profile button appears on
+every Chrome row (`index.html:1765`) showing an unset person glyph in neutral
+styling, and the picker popup lists "Default - last active" plus every profile
+from `Local State` (`index.html:1881-1887`, `chrome.js:49-63`). No rendering bug;
+all cases degrade cleanly (missing Local State -> picker shows only Default, no
+crash).
+
+**Behavioral gap found (launch side): a profile picked on a no-URL Chrome row is
+silently ignored at launch.** The picker persists `profile` and main.js forwards
+it (`main.js:521-526`), but `win32.launch` only applies `--profile-directory`
+when a `url` is also present (`win32.js:280-281`); the url-only branch also needs
+a url (`win32.js:284-285`). A profile-but-no-url target falls through to
+`spawnDetached(exePath, [])` (`win32.js:303-304`) - bare `chrome.exe`, profile
+dropped. So on a title-only row the user can pick "Work profile" and launch still
+opens the default Chrome. This is the launch-side counterpart to the title-only
+capture limitation already logged at `WINDOWS_FINDINGS.md:1646-1653`; the picker
+UI itself works, the launch just has no profile-without-url branch. Whether that
+is intended or an oversight can't be settled from code alone - flagging for a
+product call (a `--profile-directory`-only launch branch would close the gap).
