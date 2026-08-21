@@ -19,6 +19,9 @@
   "build": {
     "appId": "com.helm.app",
     "productName": "Helm",
+    "protocols": [
+      { "name": "Helm", "schemes": ["helm"] }
+    ],
     "publish": {
       "provider": "github",
       "owner": "zyrxun",

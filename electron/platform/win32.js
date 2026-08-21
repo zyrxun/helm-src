@@ -281,6 +281,10 @@ async function launch(target) {
     return { ok: spawnDetached(target.exePath, [`--profile-directory=${target.profile}`, target.url]) };
   }
 
+  if (browser && target.exePath && target.profile) {
+    return { ok: spawnDetached(target.exePath, [`--profile-directory=${target.profile}`]) };
+  }
+
   if (browser && target.exePath && target.url) {
     return { ok: spawnDetached(target.exePath, [target.url]) };
   }
