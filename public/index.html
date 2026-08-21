@@ -1116,7 +1116,7 @@
   };
   const isWin = () => PLATFORM.id === 'win32';
   const MOD_HINT = () => isWin()
-    ? 'Include at least one modifier key (Ctrl, Alt, Shift).'
+    ? 'Use Ctrl or Shift. Windows reserves Ctrl+Alt, so it will not record.'
     : 'Include at least one modifier key (⌘, ⌃, ⌥, ⇧).';
 
   let toastTimer = null;
@@ -1175,7 +1175,7 @@
     const onKey = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (['Meta','Control','Alt','Shift'].includes(e.key)) return;
+      if (['Meta','Control','Alt','Shift','AltGraph'].includes(e.key)) return;
       document.removeEventListener('keydown', onKey, true);
       pill.classList.remove('capturing');
       if (e.key === 'Escape') {
@@ -1209,7 +1209,7 @@
     const onKey = async (e) => {
       e.preventDefault();
       e.stopPropagation();
-      if (['Meta','Control','Alt','Shift'].includes(e.key)) return;
+      if (['Meta','Control','Alt','Shift','AltGraph'].includes(e.key)) return;
       document.removeEventListener('keydown', onKey, true);
       pill.classList.remove('capturing');
 

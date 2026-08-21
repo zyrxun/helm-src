@@ -220,6 +220,11 @@ app.whenReady().then(async () => {
     },
   });
 
+  if (IS_WINDOWS) {
+    win.removeMenu();
+    win.autoHideMenuBar = true;
+  }
+
   win.loadFile(path.join(__dirname, '../public/index.html'));
   hardenNavigation(win);
   // The macOS menu-bar popover hides as soon as it loses focus. The Windows
