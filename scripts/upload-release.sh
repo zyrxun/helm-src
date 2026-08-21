@@ -33,12 +33,24 @@ if [ -z "$VERSION" ]; then
 fi
 echo "Uploading Helm v$VERSION to R2 bucket: $BUCKET"
 
+# macOS artifacts + feed, then Windows artifacts + feed. The ls existence check
+# below skips any file not present, so a mac-only or win-only dist/ uploads only
+# what it built. Windows updates use the same R2 origin (electron/main.js:274-278
+# points the generic updater feed here on both platforms); latest.yml is the
+# Windows feed beside latest-mac.yml, and references all three nsis setups.
 for file in \
   "$DIST/Helm-${VERSION}-universal.dmg" \
   "$DIST/Helm-${VERSION}-universal.dmg.blockmap" \
   "$DIST/Helm-${VERSION}-universal-mac.zip" \
   "$DIST/Helm-${VERSION}-universal-mac.zip.blockmap" \
-  "$DIST/latest-mac.yml"
+  "$DIST/latest-mac.yml" \
+  "$DIST/Helm-${VERSION}-setup.exe" \
+  "$DIST/Helm-${VERSION}-setup.exe.blockmap" \
+  "$DIST/Helm-${VERSION}-x64-setup.exe" \
+  "$DIST/Helm-${VERSION}-x64-setup.exe.blockmap" \
+  "$DIST/Helm-${VERSION}-arm64-setup.exe" \
+  "$DIST/Helm-${VERSION}-arm64-setup.exe.blockmap" \
+  "$DIST/latest.yml"
 do
   if ls $file 1>/dev/null 2>&1; then
     for f in $file; do

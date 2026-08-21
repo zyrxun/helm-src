@@ -89,6 +89,10 @@
     },
     "win": {
       "icon": "public/brand/icon.ico",
+      "publish": {
+        "provider": "generic",
+        "url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev"
+      },
       "target": [
         {
           "target": "nsis",

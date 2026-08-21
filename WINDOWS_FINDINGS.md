@@ -2076,3 +2076,43 @@ capture limitation already logged at `WINDOWS_FINDINGS.md:1646-1653`; the picker
 UI itself works, the launch just has no profile-without-url branch. Whether that
 is intended or an oversight can't be settled from code alone - flagging for a
 product call (a `--profile-directory`-only launch branch would close the gap).
+
+## Fixes applied after the sweep (commits f0b7a71, and the publish fix)
+
+Three of the sweep findings were fixed directly.
+
+**1. Install-time helm:// registration (`f0b7a71`).** Added the electron-builder
+`protocols` key (`package.json` build). Registers the scheme at install time on
+both platforms instead of relying only on the runtime
+`setAsDefaultProtocolClient` (`main.js:118-122`), closing the never-launched-app
+dead-link. This is deliberately not macOS-neutral - it also writes the macOS
+Info.plist `CFBundleURLTypes`, which is additive to and consistent with the
+existing runtime registration (owner-approved).
+
+**2. Profile-without-url launch branch (`f0b7a71`).** `win32.launch` gained a
+`browser + exePath + profile` (no url) branch that spawns
+`--profile-directory=<dir>` only (`win32.js:284-286`), reusing the profile+url
+branch's exact construction. A title-only Chrome row with a picked profile no
+longer launches bare chrome.exe. Windows-only file; profile+url still wins by
+priority.
+
+**3. Publish/delivery target - the real gap was delivery, not config.** The
+earlier note ("GitHub vs R2, they disagree") was half right. The installed
+client already fetches updates from R2 on both platforms: `main.js:274-278` calls
+`autoUpdater.setFeedURL({provider:'generic', url: pub-...r2.dev})` with no
+platform guard, which overrides the GitHub `app-update.yml` baked from
+`build.publish`. So the Windows client was already correct. The genuine gaps:
+(a) `scripts/upload-release.sh` only uploaded the macOS artifacts + `latest-mac.yml`
+to R2, never the Windows `.exe`/`latest.yml`, so the Windows client's
+`GET .../latest.yml` 404s; and (b) `release:win --publish` would push to GitHub,
+which the client no longer reads. Fixes: added a win-scoped
+`publish: {provider:'generic', url: r2.dev}` block (`package.json` `win`) so the
+baked Windows config and any `--publish` match R2 - the shared top-level
+`publish` (mac) is left untouched; and extended `upload-release.sh` to also
+upload the three nsis setups (`latest.yml` references combined + x64 + arm64),
+their blockmaps, and `latest.yml`. The loop's `ls` existence check means a
+mac-only or win-only `dist/` uploads only what it built, so macOS delivery is
+unchanged. **Owner still must confirm** the R2 `helm-updates` bucket actually
+receives these files at the next release (bucket contents are external to the
+repo) and note that the generic provider is download-only - Windows artifacts
+reach R2 via this script, not via `electron-builder --publish`.
