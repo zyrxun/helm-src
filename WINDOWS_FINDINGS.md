@@ -2116,3 +2116,87 @@ unchanged. **Owner still must confirm** the R2 `helm-updates` bucket actually
 receives these files at the next release (bucket contents are external to the
 repo) and note that the generic provider is download-only - Windows artifacts
 reach R2 via this script, not via `electron-builder --publish`.
+
+## Item 4 follow-up — both teardown defects fixed (2026-08-22, PC, `8d8a3ee`)
+
+The two consequences flagged above at `WINDOWS_FINDINGS.md:1724-1735` — the
+dirty-title asterisk breaking `TitleFilter`, and the close budget arithmetic —
+are both fixed. What follows separates what was exercised against a real window
+from what was reasoned about.
+
+**Dirty-marker titles now match (verified live).** `close.ps1` compared each
+live window title to each filter entry raw
+(`$title -eq $t -or $title.StartsWith($t, Ordinal)`), so an app that renames its
+window the moment work is unsaved dropped out of the filter. A
+`Get-UnmarkedTitle` helper (`close.ps1:146-155`) strips one leading dirty
+marker — `*` (Notepad and most editors), `●` (VS Code), `•` — plus at most one
+space after it. Both sides are normalised: each filter entry contributes its raw
+and unmarked form (`close.ps1:160-171`), because a filter captured while the
+window was dirty stores the marker the window may no longer have, and each live
+title is compared in both forms (`close.ps1:175-190`). The strip is deliberately
+narrow — position 0 only, exactly one character, and never down to an empty
+string. `StartsWith`-not-`-like` and `Ordinal` are unchanged; a window title is
+still not a pattern.
+
+Exercised as a real teardown against a real Notepad, twice, once per script
+version. Notepad was started, its `Edit` child seeded via
+`EM_SETSEL`/`EM_REPLACESEL` (synthetic keystrokes are blocked on this machine),
+and dirtiness confirmed with `EM_GETMODIFY` before each run. Both runs used the
+**clean** caption as the filter, against a window whose live caption had already
+become `*Untitled - Notepad`:
+
+```
+# pre-fix (HEAD 79b6714 copy of close.ps1)
+EM_GETMODIFY=True title now=[*Untitled - Notepad]
+close script output=[No matching windows] elapsed=550ms
+save prompts open: 0
+
+# post-fix
+EM_GETMODIFY=True title now=[*Untitled - Notepad]
+close script output=[Closed 1] elapsed=3357ms
+  window hwnd=327920 class=#32770 title=[Notepad]
+  window hwnd=788602 class=Notepad title=[*Untitled - Notepad]
+save prompts open: 1
+```
+
+So the defect and the fix are both confirmed on hardware: the dirty window was
+untouched before and receives `WM_CLOSE` after, with Notepad's own save prompt
+opening as designed. The prompt was dismissed with `WM_CLOSE` to the `#32770`
+(acts as Cancel) and no Notepad process was left behind by either run. The 3357
+vs 550 ms gap also re-confirms the ~3 s `SMTO_ABORTIFHUNG` cost of a dirty
+window recorded at `WINDOWS_FINDINGS.md:1706-1708`.
+
+Matching semantics were additionally checked as a unit, by parsing the shipped
+`close.ps1` and invoking its real `Get-UnmarkedTitle` from a harness: 18 cases,
+0 failures — clean/clean, `*`-dirty title vs clean filter, `●`/`•` markers,
+dirty filter vs clean title, browser prefix match still working with and without
+a marker, `Multiply * Divide` unaffected mid-title, `A*B` not stripped, a
+double-marked `**Untitled` not collapsing, a `\x1f`-joined multi-title filter,
+and the two guards that matter: a filter of `*` does not match everything, and
+`* ` cannot normalise to an empty prefix (`StartsWith('')` is always true).
+
+**Close budget now scales with the work (fix landed, not exercised live).**
+`win32.js` ran `close.ps1` under a flat 8 s. At ~3 s per dirty window,
+sequential, three dirty windows exhausted it and the tail of the close list was
+never messaged. The timeout is now derived (`win32.js:332-334, 351-369`): 8 s
+base, 4 s per title filter beyond the first, capped at 30 s, and a call with no
+`-TitleFilter` takes the cap because it messages every window the process owns —
+a count Helm cannot know from the JS side. Non-browser teardown (Notepad, Word)
+is exactly that filterless case, so it is the one that gains most. Note this is
+a kill deadline, not a wait: a fast teardown still returns as fast as before.
+
+Not verified live: the multi-dirty-window exhaustion itself. Reproducing it
+means three-plus unsaved documents and three-plus buried save prompts on
+Richard's machine, which is not worth the risk of losing real work for an
+arithmetic change; the per-window ~3 s cost it is derived from is measured
+(above and at `WINDOWS_FINDINGS.md:1706-1708`). `node --check
+electron/platform/win32.js` passes. `win32.js` today always passes at most one
+title, so on current call paths the change is the filterless branch plus
+future-proofing for `\x1f`-joined filters like `darwin.js:268-272` sends.
+
+Both files are Windows-only under `WINDOWS_TESTING.md`'s table; no shared file
+was touched, so there is no macOS exposure in this change.
+
+Still open from item 4, unchanged by this pass: `Closed N` counts sends, not
+closes, and save prompts still open behind the foreground window when teardown
+runs from the tray popover.
