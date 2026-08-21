@@ -1585,3 +1585,160 @@ A row like that can never recover a URL, under any scheme, because there is
 nothing to recover it from. Capturing it title-only is the correct outcome.
 Together with finding C it accounts for both unrecovered rows in the final
 1/3 smoke score.
+
+---
+
+# Fourth session — 2026-08-21: the gating manual tests, run with a human
+
+Same machine, same branch, from `6ac8a09`. This session ran the first three
+items of the manual test list interactively with Richard at the keyboard, and
+delegated the automatable half of item 4 — teardown against unsaved work — to
+an agent whose transcript was verified step by step. Everything below was
+observed on hardware, not inferred.
+
+## The dev-identity trap — why test 1 failed on the first attempt
+
+Test 1 initially looked broken: marker deleted, app relaunched, no welcome
+card. The instruction had been to delete `%APPDATA%\Helm\welcomed`, and that
+was the wrong folder. Running `electron electron\main.js` in dev mode gives the
+app the name **Electron**, so `app.getPath('userData')` is
+`%APPDATA%\Electron` — the live marker was `%APPDATA%\Electron\welcomed`, and
+the workflows this session captured live in `%APPDATA%\Electron\Helm\`.
+`%APPDATA%\Helm` also exists on this machine from differently-launched runs,
+and it is a red herring for dev testing. Confirmed by attaching an inspector to
+the running main process and asking `app.getPath('userData')` directly.
+
+This is the Windows twin of the documented macOS "dev mode vs prod TCC differ"
+issue, and it will bite anyone testing first-run behaviour in dev. A packaged
+Helm uses `%APPDATA%\Helm`; dev uses `%APPDATA%\Electron`. Written here so the
+next session does not spend an hour on it.
+
+While diagnosing this, one launch appeared to show the original instance dying
+when a second was started. A controlled re-run could not reproduce it — the
+lock held: instance 2 exited in about two seconds and instance 1 survived. The
+one observed death coincided with a moment Richard may simply have quit the
+app from the tray; unconfirmed either way. Noted as watched-for, not as a
+defect.
+
+## Test 1 — first-run welcome and tray discoverability: pass
+
+With the right marker (`%APPDATA%\Electron\welcomed`) deleted and every stale
+instance killed, a fresh launch showed the welcome card — window title
+`Welcome to Helm`, presence verified via `EnumWindows` as well as by eye — and
+Richard's verdict on the card was that it works: it got a first-time user to
+the tray icon in the overflow area. The unresolved half of item 1 from the
+2026-08-20 next-steps list is now resolved by a human.
+
+## Test 2 — second launch lands in the running instance: pass, one caveat
+
+With the app running, a second `electron electron\main.js` was absorbed
+correctly: the new process exited after about two seconds, the original
+survived, and the popover appeared, foreground and focused.
+
+The caveat: the popover appeared at the centre of the screen, not anchored to
+the tray icon. The `second-instance` handler called `win.show()` directly,
+skipping the `getWindowPosition()` call that `toggleWindow()` performs, so the
+window surfaced wherever it last was — for a never-shown window, Electron's
+default centred position. Fixed this session by positioning before showing,
+inside the existing `IS_WINDOWS` block, so macOS never executes the changed
+line. Committed separately from this write-up.
+
+## Test 3 — title-only browser rows, exercised by real usage
+
+Richard captured a workflow from a live Chrome session — a Gemini tab and two
+ChatGPT windows — and reported that running it "doesn't open the correct tab,
+only chrome is open but not the information inside it." The saved workflow
+confirms why: all three Chrome rows carry `name`, `label` and `exePath` only.
+No `url`, no `profile`. Launch therefore starts bare `chrome.exe`, which is
+the designed behaviour for a title-only row.
+
+Each of the three captions was then probed against every profile's `History`
+with the same tooling as findings C and D. All three were refused by the
+ambiguity rule, and all three refusals are genuine — capture logged
+`caption matches more than one page, no URL recovered` for each:
+
+- `Google Gemini` — 15+ distinct URLs across three profiles, all on
+  `gemini.google.com`: the app home, four chats, the library, four notebooks.
+  Every Gemini surface shares one title.
+- `ChatGPT` — 77+ distinct URLs across **four hosts** (`chatgpt.com`,
+  `auth.openai.com`, `accounts.google.com`, `www.google.com` redirect stubs).
+- `ChatGPT: Chat, Work, Create & Code with AI` — 5+ URLs across two hosts.
+
+So the rule did exactly what the third-session write-up said it would, and
+recovery was not broken — the same day's smoke run recovered a URL for an
+ordinary article page (1/3, with the two refusals being `New Tab`).
+
+**The finding is the consequence, not a bug in the rule.** Single-page apps —
+ChatGPT, Gemini, and their kind — reuse one `document.title` across every
+page, so on Windows they will *systematically* capture title-only. On macOS
+this never arises: `capture.jxa` reads the real tab URL from Chrome via Apple
+Events (`perTabCapture: true`), and the History path is only a fallback for
+profile attribution. Windows has no Apple Events, capture sees only window
+captions, and for SPA sites the caption provably cannot name a page. The
+user-visible result is what Richard hit: a workflow that looks captured but
+restores an empty browser.
+
+Worth writing up rather than inventing here (per the brief, these are
+suggestions, not implementations):
+
+1. **Say so in the row UI.** A title-only browser row could carry a visible
+   "opens the app, not the page" hint, so the surprise happens at save time,
+   not launch time.
+2. **Let the user paste a URL.** A manual URL field on a captured browser row
+   turns the refusal into a one-time correction.
+3. **Longer term, real per-tab capture** via the DevTools protocol or a
+   browser extension — the only way Windows reaches parity with `perTabCapture`
+   on macOS. Substantial, and out of scope for this port pass.
+
+The renderer half of item 3 — how a title-only row renders and whether the
+profile picker behaves — remains to be judged in the sweep.
+
+## Item 4, automated half — teardown against unsaved work
+
+Run by an agent against dev Notepad windows carrying unsaved text, with every
+claim re-verified from the transcript. Method note, disclosed: Win10 Notepad's
+edit control exposes no UIA ValuePattern, so the agent seeded dirty text via
+`EM_SETSEL`/`EM_REPLACESEL` by HWND rather than through the UI; the dirty
+state itself was confirmed real via `EM_GETMODIFY`.
+
+What `close.ps1` actually does with a dirty window:
+
+1. **No hang, no force-kill.** `WM_CLOSE` via `SendMessageTimeout` with
+   `SMTO_ABORTIFHUNG` returned in ~345 ms for clean windows and ~3.0 s for a
+   dirty one. Work is never destroyed by the teardown itself.
+2. **`Closed N` means "messaged N", not "closed N".** When the user picks
+   Cancel in Notepad's save prompt, the window survives with its text intact
+   (`EM_GETMODIFY` still true) — and the script still counted it. The count is
+   a send count. Renaming the output would be cosmetic; recorded so nobody
+   trusts the number as a close confirmation.
+3. **Save prompts open buried.** The `#32770` "Notepad" prompt
+   (Save / Don't Save / Cancel) inherits the target window's activation. Helm
+   tears down from a tray popover, so the target is unfocused and the prompt
+   opens *behind* whatever is foreground. A user who does not notice it will
+   think the teardown stalled.
+4. **One dirty window serially blocks the clean ones behind it** in the same
+   filter pass — the 3 s per-window timeout is sequential.
+5. **Cancel preserves work end to end.** Text verified intact after the full
+   teardown pass.
+
+Two consequences worth flagging:
+
+- **Budget arithmetic (inference, not exercised):** `win32.js` invokes
+  `close.ps1` with an 8 s timeout. At ~3 s per dirty window, three dirty
+  windows exhaust the budget mid-run and the tail of the close list is never
+  messaged.
+- **New defect, verified independently: the dirty-title asterisk breaks
+  `TitleFilter`.** Win10 Notepad retitles a dirty window `*Untitled - Notepad`.
+  `close.ps1` matches titles with `StartsWith`, so the filter that matched the
+  clean window misses the same window once it has unsaved changes — the exact
+  case where closing carefully matters most. Any app using the common
+  asterisk-prefix dirty convention is affected.
+
+## Where this leaves the gating list
+
+Tests 1 and 2 pass (test 2's positioning caveat fixed). Test 3's launch half
+behaved as designed and is now explained; its renderer half joins the sweep.
+Item 4's scripted half is done; the in-app half — a real teardown from the
+popover over an unsaved document — still needs a human, and after that the
+~30-minute sweep: tray menu, popover position after the fix, hotkey, focus
+mode, `pack:win`, and the `helm://` cold start.

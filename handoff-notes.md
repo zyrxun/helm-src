@@ -1,6 +1,53 @@
-# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, reconcile with the Mac session, close the two hardware gaps)
+# Session Handoff — 2026-08-21 (the gating manual tests, run with Richard)
 
 > Newest on top. Previous handoffs preserved below.
+
+Ran on Richard's Windows 10 PC, branch `windows-port`, from `6ac8a09`. This
+session ran manual tests 1–3 interactively with Richard and delegated the
+scripted half of test 4 (teardown vs unsaved work) to an agent. Full results in
+`WINDOWS_FINDINGS.md`, "Fourth session — 2026-08-21".
+
+## Results in one paragraph
+
+Tests 1 and 2 **pass**. Test 1's first attempt failed because of the
+**dev-identity trap**: dev mode (`electron electron\main.js`) is app-named
+"Electron", so userData is `%APPDATA%\Electron` (marker
+`%APPDATA%\Electron\welcomed`, workflows `%APPDATA%\Electron\Helm\workflows.json`);
+`%APPDATA%\Helm` is a red herring in dev. Test 2 surfaced the popover at
+screen centre — the `second-instance` handler called `win.show()` without
+`getWindowPosition()`; **fixed this session** inside the `IS_WINDOWS` block
+(macOS never runs the changed lines). Test 3: Richard's captured Chrome rows
+(Gemini + two ChatGPT windows) all saved **title-only** — probed all three
+captions against every profile's History; all were genuine ambiguity refusals
+(`Google Gemini` 15+ URLs, `ChatGPT` 77+ URLs across four hosts). Designed-safe
+behaviour, but the consequence is systematic: SPA sites will always capture
+title-only on Windows because there is no per-tab capture. Suggestions
+(row-UI hint, manual URL field, DevTools-protocol capture) written up, not
+implemented. Unsaved-work teardown (agent, verified): no hang, `Closed N`
+means "messaged N", save prompts open **buried** when triggered from the tray
+popover, one dirty window serially blocks the rest, Cancel preserves work; new
+defect — Win10 Notepad's dirty-title `*` prefix breaks the `StartsWith`
+TitleFilter; inference — three dirty windows blow `win32.js`'s 8 s budget.
+
+## Open items
+
+- **Test 4's in-app half**: real teardown from the popover over an unsaved
+  document — needs Richard.
+- **The ~30-minute sweep**: tray menu, popover position (re-check after the
+  second-instance fix), hotkey, focus mode, `pack:win`/NSIS, `helm://` cold
+  start, and the renderer treatment of title-only rows (test 3's other half).
+- **Unexplained single observation**: one launch appeared to kill the original
+  instance (~12:49 PM); controlled re-run showed correct lock behaviour.
+  Richard never answered whether he quit from the tray at that moment. Watch,
+  don't chase.
+- Unchanged standing rules: `package-lock.json` modified-uncommitted predates
+  everything, leave alone; `tmp-ambig.js` untracked, keep; never push
+  `master`; diagnostic tooling lives in `../.helm-scratch/` (`probe-title.js`,
+  `probe-t3.js`, `cdp.js`, `hook.js`).
+
+---
+
+# Session Handoff — 2026-08-20 (re-measure the capture cache, finish the findings, reconcile with the Mac session, close the two hardware gaps)
 
 Ran on Richard's Windows 10 PC, branch `windows-port`. This session closed out
 the 08-14 session's tree — everything below is **committed** — and then found
