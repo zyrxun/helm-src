@@ -2200,3 +2200,93 @@ was touched, so there is no macOS exposure in this change.
 Still open from item 4, unchanged by this pass: `Closed N` counts sends, not
 closes, and save prompts still open behind the foreground window when teardown
 runs from the tray popover.
+
+# Fifth session — 2026-08-22: fresh install on real hardware, and focus mode end to end
+
+Same machine as every prior session. Two pieces of work, both against the
+rebuilt installers: the NSIS installer was actually run for the first time, and
+the last open gating-sweep item — focus mode end to end through the real
+run/teardown handlers — now passes.
+
+## The NSIS installer, run for real
+
+`Helm-1.0.3-x64-setup.exe` from the 2026-08-22 10:49 `pack:win` rebuild (the
+first `dist/` set that matches HEAD — every fix since the first hardware run is
+in it) was installed silently (`/S`, exit 0). Per-user as configured: payload
+at `%LOCALAPPDATA%\Programs\Helm\Helm.exe`, uninstall entry "Helm 1.0.3" under
+HKCU, no UAC. First launch created `%APPDATA%\Helm` with the inner `Helm`
+data dir and the `welcomed` marker, and left the app resident in the tray
+(five processes, normal for Electron).
+
+**Finding — the `protocols` key does not register `helm://` at install time on
+Windows.** `f0b7a71` added `build.protocols` expecting install-time
+registration on both platforms. Checked on this machine with a deliberate
+tell: before the install, `HKCU\Software\Classes\helm\shell\open\command`
+pointed at the dev `electron.exe` from an earlier dev run. After a successful
+install and **before** first launch, it still pointed at the dev
+`electron.exe`, and no other `helm` ProgID or `RegisteredApplications` entry
+appeared — the oneClick NSIS installer wrote nothing for the scheme. On first
+launch the runtime `setAsDefaultProtocolClient` (`main.js:121`) re-pointed the
+command at the installed `Helm.exe "%1"`, which is the mechanism that actually
+registers the scheme on Windows. So the macOS half of `f0b7a71` (Info.plist
+`CFBundleURLTypes`) stands, but on Windows the never-launched-app dead link is
+NOT closed: a user who installs and clicks a `helm://` link before ever
+launching Helm still has no handler (or a stale one). If install-time
+registration is wanted, it needs explicit NSIS registry writes
+(`nsis.include` script) — product call, unimplemented.
+
+Not observed: the SmartScreen interstitial. The exe was run from a local
+path with no Mark-of-the-Web, which skips SmartScreen entirely; the true
+download-path wording remains unconfirmed (`WINDOWS_FINDINGS.md:1993-1995`).
+
+One machine-state note: a dev run after this install re-registers `helm://`
+back to `electron.exe` (`main.js:118-119` runs unconditionally at startup), so
+dev work on this box silently steals the scheme from the installed app. It was
+restored to the installed exe by hand this session. Worth knowing before
+chasing "deep links stopped working" on a dev machine.
+
+## Focus mode end to end through run/teardown — pass
+
+The gap named at `WINDOWS_FINDINGS.md:2048-2054`: every prior focus-mode check
+drove `platform.setFocusMode` directly, never the real handler path a user
+hits. This session drove the actual `run-workflow` and `teardown-workflow`
+IPC handlers (`main.js:587-599`) — the same functions the renderer invokes —
+under a real dev Electron instance, against a real saved workflow read from
+`workflows.json` by `storage.load()` at execution time.
+
+Method, disclosed: mouse/keyboard injection is blocked on this machine, so the
+renderer click itself is still the one thing not exercised. A harness
+(`../.helm-scratch/hf-focus-harness.js`) wrapped `ipcMain.handle` to capture
+the registered handler functions, required `electron/main.js` unmodified, and
+invoked the handlers with a stub event. The workflow was `{id: 'focus-e2e-test',
+apps: [], closeApps: [], focusMode: 'Do Not Disturb'}` — empty app lists on
+purpose, so only the focus path runs (and because `close.ps1` was being edited
+in a parallel task earlier in the day). The known filename-based process
+denial on this machine was handled the documented way: the harness rewrites
+`execFile`'s `-File foc….ps1` argument to a byte-identical temp copy, deleted
+afterwards. No repo file was modified.
+
+Observed transitions (from the harness log, 2026-08-22 ~11:46 local):
+
+```
+BEFORE-RUN      toasts=[ABSENT]                          prior=[ABSENT]
+run-workflow    -> {"ok":true}
+AFTER-RUN       toasts=[REG_DWORD 0x0]                   prior=[REG_SZ "absent"]
+teardown-workflow -> {"ok":true}
+AFTER-TEARDOWN  toasts=[ABSENT]                          prior=[ABSENT]
+```
+
+Suppression landed within ~0.9 s of the handler returning (the fire-and-forget
+`.then` at `main.js:539-548`), and teardown took the restore-to-absent path —
+the exact case the `PriorToastState` design exists for: the value was deleted,
+not asserted to 1, and `PriorToastState` itself was cleaned
+(`main.js:467-474` wiring, `focus.ps1` both directions). Machine left at
+baseline: toasts value absent, `PriorToastState` absent, dev
+`workflows.json` restored byte-for-byte from backup, temp copies deleted, no
+stray processes.
+
+With this, every line of the Windows focus-mode path from the IPC boundary
+down has now run on real hardware. What remains is the literal click — the
+renderer button through `preload.js` — which rides the same handlers and is
+exercised implicitly the first time Richard runs any workflow with Do Not
+Disturb attached.

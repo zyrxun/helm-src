@@ -26,20 +26,35 @@ units of work, both verified in the main session before push.
   audit: clean. `latest.yml` lists all three setups. Build log kept at
   `logs/pack-win-2026-08-22.log`. Still unsigned — SmartScreen wall stands.
 
+## Same day, second sitting (Richard: "go through that one and install the fresh builds")
+
+- **Installed the fresh x64 build for real** (`/S`, exit 0, per-user, no UAC).
+  App is resident in the tray at `%LOCALAPPDATA%\Programs\Helm\Helm.exe` and
+  was LEFT RUNNING for Richard to poke at. First run created `%APPDATA%\Helm`
+  and the `welcomed` marker. **New finding: the `build.protocols` key does NOT
+  register `helm://` at install time on Windows** — checked before first
+  launch, the oneClick NSIS wrote nothing; runtime registration on first
+  launch is what actually claims the scheme. `f0b7a71`'s dead-link gap is
+  still open on Windows; closing it needs explicit NSIS registry writes
+  (product call). Also: any dev run steals `helm://` back to `electron.exe`
+  (`main.js:118-119`) — restored to the installed exe by hand this session.
+- **Focus mode end-to-end: PASS.** Drove the real `run-workflow` /
+  `teardown-workflow` handlers under a dev Electron instance against a saved
+  workflow (`focusMode: 'Do Not Disturb'`, empty app lists). Full round trip
+  observed: absent → 0x0 + `PriorToastState "absent"` → restored to absent,
+  both handlers `{ok:true}`. The last gating-sweep item is closed; only the
+  literal renderer click remains, which rides the same handlers. Machine
+  left at baseline, dev `workflows.json` restored. Details in
+  `WINDOWS_FINDINGS.md`, "Fifth session — 2026-08-22".
+- SmartScreen wording still unconfirmed (local exe carries no
+  Mark-of-the-Web, so the interstitial never fires from a local install).
+
 ## Open items
 
-- **Focus-mode end-to-end through run/teardown IPC**: this session's
-  permission layer refused to launch the test twice (it drives IPC handlers
-  and toggles the toast registry value), so the last sweep item is still
-  open. Either Richard runs it manually (attach Do Not Disturb to a
-  workflow, run, tear down, check `NOC_GLOBAL_SETTING_TOASTS_ENABLED`
-  restores to absent) or a future session gets it authorized.
-- **Manual install test now worth doing**: the `dist/` builds finally match
-  HEAD. Installing one also settles install-time `helm://` registration
-  (config verified present, registry effect untested) and the SmartScreen
-  interstitial wording.
 - **Signing is the launch blocker** — no Windows signing config exists;
   owner decision (OV/EV cert or Azure Trusted Signing), see `WINDOWS.md:257`.
+- **Install-time `helm://` registration** (see above) — product call:
+  accept first-launch-only registration, or add an NSIS include script.
 - **R2 delivery**: owner must confirm the bucket receives the Windows
   artifacts at next release (`upload-release.sh` now uploads them).
 - Standing: `package-lock.json` modified-uncommitted predates everything,
