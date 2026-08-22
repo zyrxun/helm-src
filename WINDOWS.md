@@ -247,22 +247,98 @@ disables Accessibility-based Chrome profile attribution.
 
 ## Code signing
 
-**Not set up.** Unsigned Windows binaries trigger a SmartScreen "Windows
-protected your PC" interstitial that the user must click through via *More
-info → Run anyway*. That is a serious conversion problem for a paid product and
-should be solved before any Windows launch.
+**Decided against.** Helm ships unsigned on Windows. No certificate, no Azure
+Trusted Signing subscription, no purchase of any kind. The reasoning is in the
+limits section below; what replaces it is the free reputation path, built on
+the `get-helm.app` domain.
 
-Options, roughly in order of cost:
+This is a deliberate trade, not an omission. The rest of this section is the
+playbook that makes it survivable.
 
-1. **Azure Trusted Signing** — cheapest real option, but requires an
-   organisation with a verifiable identity and 3+ years of history.
-2. **OV certificate** from a CA — cheaper, but reputation accrues per
-   certificate, so SmartScreen keeps warning until enough installs accumulate.
-3. **EV certificate** on a hardware token — expensive, but grants SmartScreen
-   reputation immediately.
+### What SmartScreen actually gates
 
-Once a certificate exists, electron-builder reads `CSC_LINK` and
-`CSC_KEY_PASSWORD` from the environment, matching the existing macOS pattern.
+Narrower than it first appears. The "Windows protected your PC" interstitial
+fires on **Mark-of-the-Web** — the alternate data stream a browser attaches to
+a file it downloaded. Two consequences decide the whole strategy:
+
+- **Only the first, manual install hits the wall.** The user downloads the
+  installer in a browser, the file carries MOTW, SmartScreen challenges it.
+- **Auto-updates are exempt.** electron-updater fetches the new installer over
+  HTTP itself and writes it to disk without MOTW, so no interstitial appears.
+  A user who gets past the first install never sees SmartScreen again, however
+  many releases ship.
+
+So the cost of shipping unsigned is paid exactly once per user, at the worst
+possible moment — the first run of a paid product — and never again.
+
+Reputation accrues along two axes: **per file hash** and **per download
+URL/domain**. Every new release is a new hash and starts from nothing. The
+domain reputation persists, which is why the download URL matters more than
+any individual build.
+
+### The per-release routine
+
+1. **Build and upload to the stable URL.** `npm run pack:win` on Windows, then
+   `bash scripts/upload-release.sh`. The installers must be served from
+   `updates.get-helm.app` — a stable HTTPS custom domain on the existing
+   `helm-updates` R2 bucket — rather than from a fresh link each time.
+   Domain reputation is the only reputation that carries between releases.
+   *Blocked until the custom domain is bound; see Distribution below.*
+2. **Submit the exe to Microsoft.** The software-developer file submission
+   portal — <https://www.microsoft.com/en-us/wdsi/filesubmission> — takes each
+   release binary directly. It clears Defender false positives and seeds
+   reputation for that hash ahead of the first real download. Free, and worth
+   doing on every release rather than only when something goes wrong.
+3. **Update the winget manifest.** `winget` installs bypass the SmartScreen
+   shell prompt entirely, so a user who runs `winget install Helm.Helm` never
+   meets it. Manifests live in `winget/` in this repo; the submission steps and
+   the current blockers are in `winget/README.md`.
+4. **Release infrequently.** Every release resets file-hash reputation. A
+   steady trickle of builds keeps every download permanently unknown.
+
+The download page should show the *More info → Run anyway* flow rather than
+pretending it does not happen — a user who is told what to expect clicks
+through; one who is ambushed closes the tab. That copy is public-facing and
+requires founder review, so it is not written here.
+
+### What to expect
+
+The wall shows for new file hashes and fades as installs accumulate. There is
+no threshold Microsoft publishes and no way to query current standing; the only
+signal is whether the interstitial still appears on a clean machine. Expect the
+first weeks of any release to be worse than the last.
+
+The interstitial is a click-through, not a block. The button under *More info*
+says **Run anyway**. Nothing is quarantined, nothing is deleted, and the
+installer itself is untouched — this is a reputation prompt, not a malware
+verdict.
+
+Two things make it worse than the baseline and are worth avoiding: a download
+URL that changes between releases, and a build that trips a Defender heuristic
+and never gets submitted for review. Step 1 and step 2 exist for those.
+
+### The honest limits
+
+- **No free certificate exists for closed-source commercial software.** The
+  free signing services — SignPath's OSS tier, Certum's open-source
+  certificate — are open-source only. Helm is a paid, closed-source product and
+  does not qualify for any of them.
+- **A self-signed certificate does not help.** It satisfies nothing SmartScreen
+  checks. An unsigned binary and a self-signed binary get the same treatment.
+- **Reputation cannot be bought on the free path, only earned.** Every lever
+  above is a nudge. None of them removes the first-install interstitial for a
+  brand-new build; they shorten how long it lasts.
+- **The first-install conversion cost is real.** It is being accepted, not
+  solved.
+
+> **If this is ever revisited:** the paid routes are Azure Trusted Signing
+> (cheapest, and individual validation exists — the old note here claiming a
+> 3+ year organisation requirement was out of date), an OV certificate from a
+> CA (reputation still accrues per certificate, so warnings continue for a
+> while), or an EV certificate on a hardware token (expensive, immediate
+> SmartScreen reputation). Whichever is chosen, electron-builder reads
+> `CSC_LINK` and `CSC_KEY_PASSWORD` from the environment, matching the existing
+> macOS pattern.
 
 ---
 
@@ -270,9 +346,21 @@ Once a certificate exists, electron-builder reads `CSC_LINK` and
 
 The auto-updater metadata for Windows is `latest.yml`, a sibling of the
 existing `latest-mac.yml`, in the same `helm-updates` R2 bucket.
-`scripts/upload-release.sh` uploads everything in `dist/`, so it needs no
-change — but the Windows artifacts have to be built on Windows and copied into
-`dist/` before it runs.
+`scripts/upload-release.sh` pins its uploads to the `package.json` version
+rather than globbing `dist/`, and its list was extended to cover the Windows
+setups, their blockmaps and `latest.yml`. Files it does not find are skipped,
+so a Windows-only `dist/` uploads only what it built — but the Windows
+artifacts still have to be built on Windows and copied into `dist/` before it
+runs.
+
+**No Windows artifact has been uploaded yet.** No release has run since the
+script was extended, so the bucket currently holds macOS files only. Two things
+are queued behind that: the winget submission, which needs the installer live
+at a stable URL before its hash can be validated, and the domain reputation
+described under Code signing, which cannot start accruing until downloads are
+actually served from `updates.get-helm.app`. The bucket is still reachable only
+at the rate-limited `https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev`;
+binding the custom domain is item 4 on the roadmap in `CLAUDE.md`.
 
 ---
 
@@ -322,7 +410,10 @@ session that ran the tests could not inject either.
    capture, so the caption regex — the one tolerating a zero-width space — has
    never met a real Edge caption.
 7. **`SKIP_TITLES`.** No window it targets ever appeared.
-8. **The NSIS installer.** Built, never executed. SmartScreen unseen.
+8. **The SmartScreen interstitial.** The NSIS installer itself has now been run
+   (2026-08-22, `/S`, exit 0, per-user, no UAC), but from a local path with no
+   Mark-of-the-Web, which skips SmartScreen entirely. Nobody has yet downloaded
+   the installer in a browser and seen what Windows says.
 9. **Auto-update on Windows.**
 10. **`backgroundMaterial: 'acrylic'` on Windows 11.** Only the Windows 10
     fallback has been seen.

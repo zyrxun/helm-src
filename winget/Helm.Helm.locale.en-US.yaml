@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+
+PackageIdentifier: Helm.Helm
+PackageVersion: 1.0.3
+PackageLocale: en-US
+
+Publisher: Helm
+PublisherUrl: https://get-helm.app
+PublisherSupportUrl: https://get-helm.app
+
+PackageName: Helm
+PackageUrl: https://get-helm.app
+Moniker: helm
+
+License: Proprietary
+ShortDescription: One click opens your entire configured app stack.
+Description: |-
+  Helm is a tray workflow orchestrator. Capture the apps, windows, browser
+  profiles and documents a piece of work needs, save that as a workflow, and
+  bring the whole stack up with one click. Switching workflows tears the
+  previous one back down.
+
+  Take the wheel.
+
+Tags:
+  - workflow
+  - launcher
+  - automation
+  - productivity
+  - tray
+  - focus
+
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

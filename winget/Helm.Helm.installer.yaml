@@ -1,0 +1,44 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+
+# ---------------------------------------------------------------------------
+# BLOCKER — DO NOT SUBMIT UNTIL THIS URL IS LIVE.
+#
+# winget's automated validation downloads InstallerUrl and compares the file's
+# SHA256 against InstallerSha256. The PR fails if the URL 404s, redirects
+# somewhere else, or serves any byte-for-byte different build.
+#
+# Before opening the PR, confirm all three:
+#   1. https://updates.get-helm.app/ resolves (the custom domain is bound to
+#      the helm-updates R2 bucket — still roadmap item 4 as of 2026-08-22).
+#   2. Helm-1.0.3-x64-setup.exe has been uploaded to that bucket
+#      (bash scripts/upload-release.sh — no Windows release has run yet).
+#   3. The served file hashes to InstallerSha256 below, EXACTLY:
+#        Get-FileHash .\Helm-1.0.3-x64-setup.exe -Algorithm SHA256
+#      Local build 2026-08-22, 101,560,897 bytes. Rebuilding produces a
+#      different hash; re-run the check against whatever is actually served.
+# ---------------------------------------------------------------------------
+
+PackageIdentifier: Helm.Helm
+PackageVersion: 1.0.3
+
+MinimumOSVersion: 10.0.0.0
+InstallerType: nsis
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+ReleaseDate: 2026-08-22
+
+Installers:
+  # electron-builder NSIS, oneClick with perMachine: false. Installs per-user
+  # into %LOCALAPPDATA%, so no UAC prompt. Silent install via /S verified
+  # 2026-08-22 (exit 0). winget supplies /S for InstallerType: nsis, so no
+  # InstallerSwitches block is needed.
+  - Architecture: x64
+    InstallerUrl: https://updates.get-helm.app/Helm-1.0.3-x64-setup.exe
+    InstallerSha256: C6CC85BC6A04AB0F9AD319F1503D267AFB89C4A03C031CE5F5F57E27D4127869
+
+ManifestType: installer
+ManifestVersion: 1.6.0
