@@ -49,10 +49,51 @@ units of work, both verified in the main session before push.
 - SmartScreen wording still unconfirmed (local exe carries no
   Mark-of-the-Web, so the interstitial never fires from a local install).
 
+## Same day, third sitting — signing decision made: the free way
+
+Richard decided against paid signing (no Azure Trusted Signing, no OV/EV).
+Strategy is the free reputation path: stable download domain
+(get-helm.app / updates.get-helm.app), Microsoft file submission per release,
+winget, and the fact that only the FIRST browser-downloaded install carries
+Mark-of-the-Web — electron-updater updates never hit SmartScreen. The
+decision and playbook are recorded in `WINDOWS.md` (Code signing section);
+winget manifests are prepped in `winget/`.
+
+## Next steps — all doable from the MacBook
+
+In order. Items 1-4 need only a browser or the Mac's `.env` credentials.
+
+1. **Bind the custom domain**: Cloudflare dashboard → R2 → `helm-updates` →
+   Settings → Custom Domains → add `updates.get-helm.app`. Zone is in the
+   same account, DNS auto-creates. Free; replaces the rate-limited
+   `pub-*.r2.dev` URL and accrues domain reputation across releases.
+2. **Get the Windows artifacts into the bucket.** The 2026-08-22 installers
+   live only on the Windows PC (`dist/`, gitignored). Either cross-build on
+   the Mac (`npm run pack:win` — NSIS targets build on macOS; hash will
+   differ from the PC build) or copy the PC's `dist/*.exe` + `latest.yml`
+   over, then run `bash scripts/upload-release.sh` (already uploads the
+   Windows set). **`latest.yml` must match the uploaded exes** — it embeds
+   their sha512s, so upload the yml from the same build you upload.
+3. **Fix the winget hash to match reality**: `winget/` manifests carry the
+   PC build's sha256 (`c6cc85bc…`). If the Mac rebuilds instead of copying,
+   recompute (`shasum -a 256 dist/Helm-1.0.3-x64-setup.exe`) and update
+   `Helm.Helm.installer.yaml` before any submission.
+4. **Seed reputation**: submit the uploaded x64 exe at
+   https://www.microsoft.com/en-us/wdsi/filesubmission (software developer
+   form). Free, per release.
+5. **Winget PR** once 1-3 are done and the URL serves the exact file:
+   follow `winget/README.md`.
+6. **Feed URLs stay untouched until the domain is live**: `main.js:277`
+   (shared, both platforms read it) and `package.json` win publish still
+   point at `pub-…r2.dev`, which keeps working after the custom domain is
+   added. Moving them to `updates.get-helm.app` is a deliberate later
+   change — Mac-side, since it touches the shipping updater path.
+7. **Website download page** (Mac side, founder copy review): serve/link
+   the Windows download from get-helm.app and decide whether to show the
+   one-time "More info → Run anyway" guidance.
+
 ## Open items
 
-- **Signing is the launch blocker** — no Windows signing config exists;
-  owner decision (OV/EV cert or Azure Trusted Signing), see `WINDOWS.md:257`.
 - **Install-time `helm://` registration** (see above) — product call:
   accept first-launch-only registration, or add an NSIS include script.
 - **R2 delivery**: owner must confirm the bucket receives the Windows
