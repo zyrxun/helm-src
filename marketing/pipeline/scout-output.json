@@ -1,0 +1,97 @@
+[
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@obsdmd",
+    "target_platform": "X",
+    "mood_tag": "calm confidence / local sovereignty / insider exclusivity",
+    "hook_mechanism": "Ownership claim in the first three words ('Your notes live') combined with implicit threat removal — the reader doesn't feel the threat until 'whether or not we exist as a company' lands. Creates status anxiety around dependency on cloud services.",
+    "structural_layout": "Three short declarative sentences. Each one a complete thought. Final sentence is the longest and carries the emotional payload. No punctuation flourishes. Rhythm: short / short / long.",
+    "core_angle": "Security and data sovereignty. The product makes an implicit promise: you can't be held hostage. Trust is earned by admitting vulnerability ('whether or not we exist').",
+    "retention_driver": "The final clause 'whether or not we exist as a company' is an unexpected admission that creates a reread impulse — it sounds like a risk disclosure but lands as a confidence statement.",
+    "inbound_metric_tier": "Exceptional"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@vercel",
+    "target_platform": "X",
+    "hook_mechanism": "Radical compression. 'Push to deploy. That's it.' removes all complexity from the opening. The hook is the promise of nothing — no steps, no friction, no explanation needed.",
+    "structural_layout": "Two-word command sentence. Three-word confirmation. Then the payoff clause. Rhythm collapses inward then expands: micro / micro / long. The contrast creates emphasis.",
+    "core_angle": "Friction elimination. The entire value proposition is the absence of work. The product does everything so you don't have to know it exists.",
+    "retention_driver": "The dash before 'builds, previews, global edge delivery' is a list that validates the 'That's it' claim — it shows the scale of what 'That's it' actually means. Reader stays to understand what they're not doing.",
+    "mood_tag": "technical authority / precision / commanding",
+    "inbound_metric_tier": "Exceptional"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@frameworkcomputer",
+    "target_platform": "X",
+    "mood_tag": "precision / local sovereignty / peer respect",
+    "hook_mechanism": "Ownership trinity: 'Your laptop. Your parts. Your data.' Three possessives in four words. Establishes total user control before the product is even named. Reader completes the contract before the pitch begins.",
+    "structural_layout": "Three two-word fragments. Then one full sentence as payoff. Extreme compression followed by expansion. The fragments create a staccato rhythm that feels like a manifest or a contract being signed.",
+    "core_angle": "Status signaling through ownership and technical authority. The buyer is the kind of person who controls their own hardware. Repairability as identity.",
+    "retention_driver": "'Built to last — and built to be yours.' The em-dash pivot extends the sentence and doubles the promise. Reader stays to confirm both halves are real.",
+    "inbound_metric_tier": "Exceptional"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@raycastapp",
+    "target_platform": "X",
+    "mood_tag": "technical authority / calm confidence / insider exclusivity",
+    "hook_mechanism": "Launch announcement disguised as a product truth. 'Everything your team needs. One keystroke away.' resolves a pain before naming it. The launch ('Raycast for Teams is here') is withheld until after the value is established.",
+    "structural_layout": "Value statement / compression statement / reveal. Three sentences descending in length. Final sentence is the shortest — the reveal lands harder because it's brief.",
+    "core_angle": "Minimizing friction at team scale. The hook is that team coordination costs keystrokes, not meetings.",
+    "retention_driver": "The word 'here' in the final sentence creates urgency without exclamation. It's the quietest possible launch announcement — which paradoxically makes the reader lean in.",
+    "inbound_metric_tier": "Exceptional"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@linear",
+    "target_platform": "X",
+    "mood_tag": "calm confidence / technical authority / precision",
+    "hook_mechanism": "Contradiction reframe: 'Your work should feel like work' inverts the typical productivity app promise of making things feel effortless. It respects the user's identity as someone who does real work.",
+    "structural_layout": "Single long sentence as setup. One short sentence as resolution. The second sentence ('We build Linear so the software gets out of the way.') is the product pitch compressed into an apology for existing.",
+    "core_angle": "Anti-tool tool. The product wins by disappearing. Its job is to not be noticed.",
+    "retention_driver": "The phrase 'fighting your tools' is a shared enemy framing — the reader has felt this and the recognition creates engagement.",
+    "inbound_metric_tier": "High"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@craft_app",
+    "target_platform": "X",
+    "mood_tag": "precision / technical authority / insider exclusivity",
+    "hook_mechanism": "Distinction claim: 'Built for macOS. Not ported to it.' The second sentence does all the work — it names the failure mode of every competitor without naming them.",
+    "structural_layout": "Short positive claim. Short negative claim. Then the payoff elaboration. Three-beat structure: thesis / contrast / proof.",
+    "core_angle": "Technical authenticity. Native is better. The product earns trust by being built the right way, not the fast way.",
+    "retention_driver": "'None of the compromises' is the phrase that holds attention — it implies the reader already knows what compromises feel like and promises to remove them.",
+    "inbound_metric_tier": "High"
+  },
+  {
+    "status": "ACCEPTED",
+    "source_handle": "@keychron",
+    "target_platform": "X",
+    "mood_tag": "precision / craft / commanding",
+    "hook_mechanism": "Specification as proof. 'Every key, machined to spec. Every switch, tested to 50 million actuations.' Specific numbers replace claims. The reader cannot argue with an actuation count.",
+    "structural_layout": "Two parallel spec statements. Payoff sentence. The parallelism ('Every key... Every switch...') creates a cadence that feels like a quality checklist being read aloud.",
+    "core_angle": "Craft and precision. The product earns trust through obsession over detail. The brand is the specification itself.",
+    "retention_driver": "'This is what precision feels like.' is the payoff that converts specs into sensation. Reader stays to understand the feeling promised.",
+    "inbound_metric_tier": "High"
+  },
+  {
+    "status": "REJECTED",
+    "source_handle": "@stripe",
+    "reason": "Lists three handled tasks then pivots to division of labor ('You write the product. We handle the money.'). Strong structure but the core angle is delegation/partnership — Helm has no partner relationship framing, it's a solo instrument. Mood mismatch for copy generation.",
+    "original_platform": "X"
+  },
+  {
+    "status": "REJECTED",
+    "source_handle": "@linear",
+    "reason": "Feature enumeration format ('Every action has a keyboard shortcut. Every view loads instantly.'). Mood passes but structural layout is a feature list — generates generic copy when applied to Helm. Lower utility than the other Linear post.",
+    "original_platform": "X"
+  },
+  {
+    "status": "REJECTED",
+    "source_handle": "@raycastapp",
+    "reason": "'Your Mac. Your rules.' ownership framing is strong but 'without ever touching your mouse' is a feature claim that doesn't translate to Helm's value proposition. Would produce confused copy.",
+    "original_platform": "X"
+  }
+]

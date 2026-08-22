@@ -1,0 +1,72 @@
+{
+  "_note": "Accounts to monitor for viral post analysis. Agent 1 scouts these on every cycle. Curate by brand personality register — precision, authority, calm confidence. Not by industry.",
+  "_rsshub": "Uses RSSHub (rsshub.app) for feed access. No API keys required. Replace with a self-hosted instance if rate limits become an issue.",
+  "accounts": [
+    {
+      "platform": "X",
+      "handle": "linear",
+      "reason": "Calm, authoritative product copy. Short sentences. No hype. Closest brand register to Helm in the dev tools space."
+    },
+    {
+      "platform": "X",
+      "handle": "raycastapp",
+      "reason": "Power user tool, precise and confident tone, strong visual identity. Good structural hooks."
+    },
+    {
+      "platform": "X",
+      "handle": "vercel",
+      "reason": "Technical authority, peer-level voice, short punchy copy. Consistent high engagement."
+    },
+    {
+      "platform": "X",
+      "handle": "notionhq",
+      "reason": "Clean structural formats, strong hook mechanisms. Monitor for layout patterns not brand voice."
+    },
+    {
+      "platform": "X",
+      "handle": "figmadesign",
+      "reason": "High-engagement tech product posts. Good source for hook and retention driver patterns."
+    },
+    {
+      "platform": "X",
+      "handle": "keychron",
+      "reason": "Premium hardware, precision and craft register. Strong authority tone without hype."
+    },
+    {
+      "platform": "X",
+      "handle": "frameworkcomputer",
+      "reason": "Technical peer-level audience, privacy and local-control angles that mirror Helm's data sovereignty story."
+    },
+    {
+      "platform": "X",
+      "handle": "apple",
+      "reason": "Gold standard for calm, commanding product copy. Short sentences, present tense, no exclamation points."
+    },
+    {
+      "platform": "X",
+      "handle": "stripe",
+      "reason": "Technical authority at scale. Peer-level voice, no cheerleading. Strong structural hooks in product announcements."
+    },
+    {
+      "platform": "X",
+      "handle": "arcinternet",
+      "reason": "macOS power user audience overlap. Confident, design-forward product voice."
+    },
+    {
+      "platform": "X",
+      "handle": "craft_app",
+      "reason": "macOS-native premium app, calm and precise tone. Similar audience to Helm."
+    },
+    {
+      "platform": "X",
+      "handle": "obsdmd",
+      "reason": "Local-first, privacy-focused, power user audience. Local config angle directly mirrors Helm's data sovereignty."
+    }
+  ],
+  "fetch_settings": {
+    "posts_per_account": 5,
+    "min_likes": 100,
+    "min_reposts": 20,
+    "lookback_days": 7
+  }
+}

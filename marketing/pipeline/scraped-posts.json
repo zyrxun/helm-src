@@ -1,0 +1,82 @@
+[
+  {
+    "platform": "X",
+    "handle": "@linear",
+    "text": "Linear is built for speed. Every action has a keyboard shortcut. Every view loads instantly. Every interaction is designed to keep you in flow.",
+    "likes": 2341,
+    "reposts": 412,
+    "comments": 89
+  },
+  {
+    "platform": "X",
+    "handle": "@linear",
+    "text": "Your work should feel like work, not like fighting your tools. We build Linear so the software gets out of the way.",
+    "likes": 3102,
+    "reposts": 567,
+    "comments": 134
+  },
+  {
+    "platform": "X",
+    "handle": "@raycastapp",
+    "text": "Your Mac. Your rules. Raycast gives you total control over how you work — without ever touching your mouse.",
+    "likes": 1876,
+    "reposts": 334,
+    "comments": 72
+  },
+  {
+    "platform": "X",
+    "handle": "@raycastapp",
+    "text": "Everything your team needs. One keystroke away. Raycast for Teams is here.",
+    "likes": 4210,
+    "reposts": 891,
+    "comments": 203
+  },
+  {
+    "platform": "X",
+    "handle": "@vercel",
+    "text": "Push to deploy. That's it. Vercel handles the rest — builds, previews, global edge delivery.",
+    "likes": 5432,
+    "reposts": 1203,
+    "comments": 287
+  },
+  {
+    "platform": "X",
+    "handle": "@stripe",
+    "text": "Revenue recognition, tax calculation, billing logic — handled. You write the product. We handle the money.",
+    "likes": 3871,
+    "reposts": 743,
+    "comments": 156
+  },
+  {
+    "platform": "X",
+    "handle": "@frameworkcomputer",
+    "text": "Your laptop. Your parts. Your data. Framework is built to last — and built to be yours.",
+    "likes": 6234,
+    "reposts": 1456,
+    "comments": 312
+  },
+  {
+    "platform": "X",
+    "handle": "@obsdmd",
+    "text": "Your notes live on your device. Plain text. No lock-in. Obsidian works whether or not we exist as a company.",
+    "likes": 8901,
+    "reposts": 2341,
+    "comments": 445
+  },
+  {
+    "platform": "X",
+    "handle": "@craft_app",
+    "text": "Built for macOS. Not ported to it. Craft uses every native capability your Mac has — and none of the compromises.",
+    "likes": 2103,
+    "reposts": 389,
+    "comments": 91
+  },
+  {
+    "platform": "X",
+    "handle": "@keychron",
+    "text": "Every key, machined to spec. Every switch, tested to 50 million actuations. This is what precision feels like.",
+    "likes": 4567,
+    "reposts": 823,
+    "comments": 178
+  }
+]

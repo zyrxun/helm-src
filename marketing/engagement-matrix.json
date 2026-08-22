@@ -1,0 +1,27 @@
+{
+  "_note": "Populate this with your real historical engagement data. Agent 3 reads this to select publishing windows. calculate_window.py falls back to these defaults if no history exists.",
+  "X": {
+    "default_day": "Tuesday",
+    "default_hour": 9,
+    "peak_windows": [
+      { "day": "Tuesday", "hour_start": 9, "hour_end": 10, "avg_engagement_multiplier": 1.0 },
+      { "day": "Thursday", "hour_start": 9, "hour_end": 10, "avg_engagement_multiplier": 1.0 }
+    ]
+  },
+  "Instagram": {
+    "default_day": "Tuesday",
+    "default_hour": 11,
+    "peak_windows": [
+      { "day": "Tuesday", "hour_start": 11, "hour_end": 13, "avg_engagement_multiplier": 1.0 },
+      { "day": "Friday", "hour_start": 11, "hour_end": 13, "avg_engagement_multiplier": 1.0 }
+    ]
+  },
+  "Meta": {
+    "default_day": "Wednesday",
+    "default_hour": 12,
+    "peak_windows": [
+      { "day": "Wednesday", "hour_start": 12, "hour_end": 14, "avg_engagement_multiplier": 1.0 },
+      { "day": "Thursday", "hour_start": 12, "hour_end": 14, "avg_engagement_multiplier": 1.0 }
+    ]
+  }
+}

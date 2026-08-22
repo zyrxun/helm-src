@@ -1,0 +1,22 @@
+{
+  "status": "READY",
+  "selected_post": {
+    "source_blueprint": "framework_ownership_trinity",
+    "target_network": "X",
+    "validated_payload": "Your apps. Your config. Your machine.\n\nHelm stores everything in a local JSON file. Nothing leaves your device. No account. No sync.\n\nget-helm.app",
+    "character_count": 121,
+    "character_limit": 280,
+    "recommended_target_window": "Thursday 09:00–10:00 UTC",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show idle state. Optionally overlay the config path ~/Library/Application Support/Helm/workflows.json in JetBrains Mono below the popover — Fog color, small size.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  "remaining_posts": [
+    "obsidian_sovereignty",
+    "vercel_compression",
+    "raycast_launch_reveal",
+    "linear_anti_tool",
+    "craft_native_distinction",
+    "keychron_spec_as_proof"
+  ],
+  "selection_rationale": "ownership_trinity selected first: local sovereignty angle is Helm's strongest differentiator and most defensible claim. Zero competitors can make this statement while also having a cloud sync option. Leads with what no one else can say."
+}

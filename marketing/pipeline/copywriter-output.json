@@ -1,0 +1,58 @@
+[
+  {
+    "status": "APPROVED",
+    "source_blueprint": "obsidian_sovereignty",
+    "target_platform": "X",
+    "generated_copy": "Your workflows live on your device. Plain JSON. No cloud. Helm works whether or not we exist as a company.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show the popover in idle state with two or three named workflows visible. No launch animation — stillness communicates stability.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "vercel_compression",
+    "target_platform": "X",
+    "generated_copy": "Click once. That's it.\n\nHelm opens every app in your stack — in order, in state, ready to work.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Running State Animation' design prompt. Capture the gold spinning wheel mid-launch. Other workflow rows at 38% opacity. Status reads 'Launching'.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "framework_ownership_trinity",
+    "target_platform": "X",
+    "generated_copy": "Your apps. Your config. Your machine.\n\nHelm stores everything in a local JSON file. Nothing leaves your device. No account. No sync.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show idle state. Optionally overlay the config path ~/Library/Application Support/Helm/workflows.json in JetBrains Mono below the popover — Fog color, small size.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "raycast_launch_reveal",
+    "target_platform": "X",
+    "generated_copy": "Every workflow you need. One click from the menu bar.\n\nHelm is here.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show the popover open from the menu bar, clean idle state with the Helm wordmark visible in the header. Gold run buttons on each workflow row.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "linear_anti_tool",
+    "target_platform": "X",
+    "generated_copy": "Your context switch should feel like work, not setup.\n\nHelm gets out of the way. One click from the menu bar. Your entire stack is running.",
+    "visual_asset_suggestion": "Use the 'Running State Animation' design prompt. The spinning green wheel is the only active element — everything else is dim. The product disappearing into the background is the point.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "craft_native_distinction",
+    "target_platform": "X",
+    "generated_copy": "Built for macOS. Not bolted onto it.\n\nHelm uses JXA — JavaScript for Automation. Direct macOS integration. Not URL schemes. Not shortcut hacks. The real thing.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show the popover with the menu bar icon visible — the 22px monochrome template mark. Emphasise native placement.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  },
+  {
+    "status": "APPROVED",
+    "source_blueprint": "keychron_spec_as_proof",
+    "target_platform": "X",
+    "generated_copy": "Every workflow, named to spec. Every click, one action.\n\nThis is what a configured environment feels like.\n\nget-helm.app",
+    "visual_asset_suggestion": "Use the 'Menu Bar Popover UI' design prompt. Show three to four named workflows in the list — 'Deep Work', 'Client Review', 'Research' — gold run buttons. Clean, precise, no clutter.",
+    "technical_tags": ["#macos", "#developer", "#workflow", "#automation"]
+  }
+]

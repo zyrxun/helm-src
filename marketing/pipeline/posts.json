@@ -1,0 +1,168 @@
+{
+  "posts": [
+    {
+      "date": "2026-06-06",
+      "status": "done",
+      "instagram_status": "done",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "The morning boot happens once. That's not where the time goes.\n\nThe real cost is rebuilding your environment mid-day. Project pivot to client call to deep work — each one means tearing down your current setup and assembling the next from scratch.\n\nBuilding the solution at get-helm.app. Early access open."
+      },
+      "instagram": {
+        "caption": "The morning cold start is annoying. You do it once.\n\nThe midday context switch happens 5 to 10 times a day. Every pivot requires manually closing the right windows, opening the right tools, finding the right files — then undoing all of it two hours later.\n\nThat friction compounds. It doesn't stay in the background.\n\nEngineering a local environment controller to eliminate this. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-07",
+      "status": "done",
+      "instagram_status": "done",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "The best tool is the one you stop thinking about.\n\nNot because it's gone — because it works exactly as expected, every time. No surprises. No workarounds. No moment where you pause and wonder why it did that.\n\nMost productivity software fails this test. You end up managing the tool instead of using it. The tool becomes part of the problem it was supposed to solve.\n\nBuilding something that meets this standard for macOS power users. Early access coming soon at get-helm.app"
+      },
+      "instagram": {
+        "caption": "The best tool is the one you stop thinking about.\n\nNot because it's gone. Because it works exactly as expected, every time.\n\nThat's the standard. Most tools don't meet it."
+      }
+    },
+    {
+      "date": "2026-06-08",
+      "status": "done",
+      "instagram_status": "done",
+      "facebook_post_id": "1194382690415976_122100530235354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/june8.png",
+      "facebook": {
+        "message": "Context preservation is the core challenge of deep technical work.\n\nA casual incoming message tears down hours of accumulated workspace state. The reconstruction cost — reopening tabs, relocating files, rebuilding the mental model — is invisible but constant.\n\nWorking on a native tool that addresses this directly. get-helm.app"
+      },
+      "instagram": {
+        "caption": "Attention is a finite resource. Modern communication tools treat it as a shared highway.\n\nWhen an alert hits, your current desktop state shatters. The reference tabs, the mental layout, the thread you were following — all of it requires manual reconstruction.\n\nBuilding a native system to snapshot and restore your entire working environment. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-09",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530247354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "When your desktop demands deliberate navigation to reach active assets, you spend processing power on discovery instead of execution.\n\nA ready environment should respond to a single physical input. Finalizing a local orchestration layer that binds your complete workspace state to an immediate, repeatable action. Progress at get-helm.app."
+      },
+      "instagram": {
+        "caption": "A musician doesn't search a directory to locate a note. The muscle memory executes it.\n\nSoftware should match this immediacy. Your project environments should be reachable via a single, repeatable action — not buried behind three navigation steps.\n\nEngineering a system controller to give your workspace the same precision. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-10",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530277354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "There is a meaningful operational difference between an organized machine and a ready one.\n\nOrganized means data is stored neatly. Ready means your full stack is live — every tool open, every tab loaded, every context in position.\n\nThe tool I'm building at get-helm.app makes the second state as easy to reach as the first."
+      },
+      "instagram": {
+        "caption": "Organization is passive storage. Readiness is active deployment.\n\nYour operating system is designed to hide files inside clean folders. It is not designed to stage those assets together for immediate production.\n\nThe gap between organized and ready is where most work time disappears.\n\nBuilding a native layer to close it. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-11",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "macOS is the only platform where the OS and the apps feel like they were designed in the same room.\n\nThe menu bar, the system APIs, the window management, the automation layer — it all connects. Native apps that actually use these feel completely different from apps that are just web wrappers with a title bar.\n\nThat coherence is why power users stay on Mac. And that gap widens every year on everything else.\n\nBuilding natively for macOS. It's the only way to build Helm."
+      },
+      "instagram": {
+        "caption": "macOS is the only platform where the OS and the apps feel like they were designed in the same room.\n\nThat coherence is why serious builders stay on Mac. Every native integration, every system API, every pixel — it fits.\n\nThat gap widens every year on everything else."
+      },
+      "facebook_post_id": "122100534657354027"
+    },
+    {
+      "date": "2026-06-12",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530301354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "The modern professional changes operational contexts multiple times a day. Each pivot demands manual desktop reconstruction.\n\nClose these. Open those. Find that file. Remember which browser profile. Arrange the windows again.\n\nThe tool I'm building handles this context transformation instantly — archiving your current workspace and deploying the next one in a single action. get-helm.app"
+      },
+      "instagram": {
+        "caption": "The hidden cost of multitasking isn't the task switching. It's the environment switching.\n\nTearing down a fully loaded development workspace to build a client-facing one — then reversing that two hours later — burns your cognitive reserve on overhead that shouldn't exist.\n\nYour machine should change states as fast as your brain pivots.\n\nEngineering a local system tool to handle this. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-13",
+      "status": "pending",
+      "instagram_status": "ig_failed",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "Context switching isn't the problem.\n\nThe 45 seconds of setup before you can actually work is the problem. Opening apps one by one. Loading the right tabs. Arranging windows. Finding the Slack channel. Remembering which browser profile.\n\nBy the time your environment is ready, you've already broken the thread of what you were thinking.\n\nThat 45 seconds happens a dozen times a day. It adds up. And it's completely solvable.\n\nBuilding the solution for macOS. get-helm.app"
+      },
+      "instagram": {
+        "caption": "Context switching isn't the problem.\n\nThe 45 seconds of setup before you can actually work is the problem.\n\nOpening apps. Finding tabs. Arranging windows. Remembering where you were. That's not work. That's tax."
+      }
+    },
+    {
+      "date": "2026-06-14",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530325354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "Applications should behave like components of a single engine, not as independent processes that happen to share hardware.\n\nRunning final tests on the environment coordination layer this week. When your machine understands the active task, workspace management changes completely.\n\nBuild log at get-helm.app."
+      },
+      "instagram": {
+        "caption": "Independent software creates fragmented execution.\n\nYour code environment, layout tools, and reference browsers exist in complete isolation from each other. They force you to act as the manual bridge — constantly translating between contexts your tools can't perceive.\n\nA unified system controller changes this entirely. Engineering it now. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-15",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530349354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "The menu bar is the highest-priority real estate on macOS. Always visible, always accessible, native to the OS.\n\nThe interface I'm finalizing sits quietly in the menu bar, consumes minimal memory, and gives you total command over every configured workspace on your machine.\n\nOne click. Your entire stack is ready. More at get-helm.app."
+      },
+      "instagram": {
+        "caption": "Every pixel on a professional monitor should serve a functional purpose.\n\nThe status bar at the top of your display should give you total control over your active workspace — observe, archive, and deploy entire project environments without opening a single heavy application.\n\nBuilding a native menu bar controller that does exactly this. Link in bio."
+      }
+    },
+    {
+      "date": "2026-06-16",
+      "status": "pending",
+      "instagram_status": "ig_failed",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "Your environment is part of your output.\n\nThe apps you have open, the tabs loaded, the windows arranged — none of that is overhead. It's the scaffolding your thinking runs on.\n\nPower users know this. They spend time configuring their environment not because they're obsessed with setup, but because they understand that a ready environment removes friction from the actual work.\n\nThe problem is doing that configuration manually, every single time you switch contexts.\n\nWorking on a fix. get-helm.app"
+      },
+      "instagram": {
+        "caption": "Your environment is part of your output.\n\nThe apps you have open, the tabs loaded, the windows arranged — that's not admin. That's the work.\n\nA configured environment isn't a luxury. It's a decision you make about how seriously you take the work."
+      }
+    },
+    {
+      "date": "2026-06-17",
+      "status": "scheduled",
+      "instagram_status": "ig_failed",
+      "facebook_post_id": "1194382690415976_122100530373354027",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "The build is locked. The deployment window opens tomorrow at midnight.\n\nThis is a local-first alternative to heavy subscription workspace tools. Single purchase. No data leaves your machine.\n\nThe email list receives the binary first — before the Product Hunt post goes live. Secure your download link at get-helm.app before the manifest closes."
+      },
+      "instagram": {
+        "caption": "Tomorrow night, the workspace configuration tax ends.\n\nNo subscription frameworks. No telemetry. No interface bloat. One native application to capture and deploy your entire working environment in a single click.\n\nThe email list gets the download link first. The manifest closes tonight.\n\nget-helm.app"
+      }
+    },
+    {
+      "date": "2026-06-18",
+      "status": "pending",
+      "instagram_status": "ig_failed",
+      "image_url": "https://pub-ec64f4f5098d43328a5073456b0d41ab.r2.dev/marketing/placeholder.png",
+      "facebook": {
+        "message": "Been building something for macOS power users who feel everything we've been talking about this week.\n\nIt's called Helm. It lives in your menu bar. One click opens your entire configured workspace — every app, every tab, every window — exactly where you need it.\n\nYour config stays local. No account. No cloud. No subscription to something that holds your workflow hostage.\n\nEarly access is open at get-helm.app"
+      },
+      "instagram": {
+        "caption": "Been building something for macOS power users who feel everything we've been talking about this week.\n\nOne click from the menu bar. Your entire environment is ready.\n\nEarly access is open. Link in bio.\n\nget-helm.app"
+      }
+    }
+  ]
+}
